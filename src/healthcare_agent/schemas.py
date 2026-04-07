@@ -13,6 +13,7 @@ class TokenUsage(BaseModel):
 
 class AssessmentResponse(BaseModel):
     content: str
+    agent_name: str
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
@@ -22,6 +23,7 @@ class AssessmentResponse(BaseModel):
 
 
 class AssessmentResult(BaseModel):
+    agent_name: str
     content: str
     usage: TokenUsage
 
@@ -30,3 +32,8 @@ class PreprocessedInput(BaseModel):
     medical_data: str
     source_summary: str
     notes: list[str] = Field(default_factory=list)
+
+
+class RouterDecision(BaseModel):
+    agent_name: str
+    reason: str = ""

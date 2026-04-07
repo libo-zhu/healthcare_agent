@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -7,8 +8,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_deepseek import ChatDeepSeek
 
 from healthcare_agent.config import DEFAULT_BASE_URL, DEFAULT_MODEL, get_deepseek_api_key
-from healthcare_agent.prompts import build_healthcare_prompt
-from healthcare_agent.schemas import AssessmentResult, TokenUsage
+from healthcare_agent.prompts import ROUTER_AGENT_NAMES, build_router_prompt, build_specialist_prompt
+from healthcare_agent.schemas import AssessmentResult, RouterDecision, TokenUsage
 
 
 def build_chat_model() -> ChatDeepSeek:
@@ -20,24 +21,40 @@ def build_chat_model() -> ChatDeepSeek:
     )
 
 
-def build_agent_chain():
+def build_router_chain():
     model = build_chat_model()
-    prompt = build_healthcare_prompt()
+    prompt = build_router_prompt()
+    return prompt | model
+
+
+def build_specialist_chain(agent_name: str):
+    model = build_chat_model()
+    prompt = build_specialist_prompt(agent_name)
     return prompt | model
 
 
 def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
-    chain = build_agent_chain()
+    decision, router_usage = route_to_specialist(medical_data)
+    chain = build_specialist_chain(decision.agent_name)
     message = chain.invoke({"medical_data": medical_data})
     return AssessmentResult(
+        agent_name=decision.agent_name,
         content=extract_message_text(message),
-        usage=extract_token_usage(message),
+        usage=add_token_usage(router_usage, extract_token_usage(message)),
     )
 
 
 async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
-    chain = build_agent_chain()
-    final_usage = TokenUsage()
+    decision, router_usage = route_to_specialist(medical_data)
+    yield {
+        "type": "route",
+        "agent_name": decision.agent_name,
+        "agent_label": ROUTER_AGENT_NAMES[decision.agent_name],
+        "reason": decision.reason,
+    }
+
+    chain = build_specialist_chain(decision.agent_name)
+    final_usage = router_usage
     async for chunk in chain.astream({"medical_data": medical_data}):
         chunk_text = extract_message_text(chunk)
         if chunk_text:
@@ -45,14 +62,23 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
 
         chunk_usage = extract_token_usage(chunk)
         if chunk_usage.total_tokens:
-            final_usage = chunk_usage
+            final_usage = add_token_usage(router_usage, chunk_usage)
 
     yield {
         "type": "done",
+        "agent_name": decision.agent_name,
         "input_tokens": final_usage.input_tokens,
         "output_tokens": final_usage.output_tokens,
         "total_tokens": final_usage.total_tokens,
     }
+
+
+def route_to_specialist(medical_data: str) -> tuple[RouterDecision, TokenUsage]:
+    chain = build_router_chain()
+    message = chain.invoke({"medical_data": medical_data})
+    decision = parse_router_decision(extract_message_text(message))
+    usage = extract_token_usage(message)
+    return decision, usage
 
 
 def extract_message_text(message: BaseMessage | AIMessageChunk | str) -> str:
@@ -97,4 +123,45 @@ def extract_token_usage(message: BaseMessage | AIMessage | AIMessageChunk) -> To
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total_tokens,
+    )
+
+
+def add_token_usage(first: TokenUsage, second: TokenUsage) -> TokenUsage:
+    return TokenUsage(
+        input_tokens=first.input_tokens + second.input_tokens,
+        output_tokens=first.output_tokens + second.output_tokens,
+        total_tokens=first.total_tokens + second.total_tokens,
+    )
+
+
+def parse_router_decision(raw_text: str) -> RouterDecision:
+    normalized = raw_text.strip()
+    try:
+        payload = json.loads(extract_json_object(normalized))
+    except json.JSONDecodeError:
+        return fallback_router_decision(normalized)
+
+    agent_name = payload.get("agent_name", "").strip()
+    reason = str(payload.get("reason", "")).strip()
+    if agent_name not in ROUTER_AGENT_NAMES:
+        return fallback_router_decision(normalized)
+    return RouterDecision(agent_name=agent_name, reason=reason)
+
+
+def extract_json_object(raw_text: str) -> str:
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return raw_text
+    return raw_text[start : end + 1]
+
+
+def fallback_router_decision(raw_text: str) -> RouterDecision:
+    lowered = raw_text.lower()
+    for agent_name in ROUTER_AGENT_NAMES:
+        if agent_name in lowered:
+            return RouterDecision(agent_name=agent_name, reason="fallback parser matched agent name")
+    return RouterDecision(
+        agent_name="blood_related_issues",
+        reason="fallback defaulted to blood_related_issues",
     )

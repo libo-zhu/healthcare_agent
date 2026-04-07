@@ -48,6 +48,7 @@ def create_health_assessment(request: AssessmentRequest) -> AssessmentResponse:
 
     return AssessmentResponse(
         content=result.content,
+        agent_name=result.agent_name,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
         total_tokens=result.usage.total_tokens,
@@ -98,6 +99,7 @@ async def create_health_assessment_from_files(
 
     return AssessmentResponse(
         content=result.content,
+        agent_name=result.agent_name,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
         total_tokens=result.usage.total_tokens,
