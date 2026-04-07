@@ -9,6 +9,7 @@
 - 按文件拆分了配置、prompt、agent 执行和命令行入口
 - 默认使用 `deepseek-chat`
 - 采用“1 个路由 agent + 4 个专科 agent”的 prompt engineering 结构
+- 额外提供 1 个全科综合分析 agent
 - 直接打印模型输出，用于验证 API 是否正常
 
 ## 运行方式
@@ -66,9 +67,27 @@ http://127.0.0.1:8000/docs
 
 这意味着你本地前端页面可以直接请求这个 FastAPI 服务。
 
-### 普通接口
+## 接口分组
 
-`POST /api/v1/health-assessment`
+当前共有 8 个核心接口：
+
+- 专科路由分析：`POST /api/v1/specialist/assessment`
+- 专科路由分析流式：`POST /api/v1/specialist/assessment/stream`
+- 专科路由分析文件上传：`POST /api/v1/specialist/assessment/files`
+- 专科路由分析文件上传流式：`POST /api/v1/specialist/assessment/files/stream`
+- 全科综合分析：`POST /api/v1/general/assessment`
+- 全科综合分析流式：`POST /api/v1/general/assessment/stream`
+- 全科综合分析文件上传：`POST /api/v1/general/assessment/files`
+- 全科综合分析文件上传流式：`POST /api/v1/general/assessment/files/stream`
+
+其中：
+
+- `specialist` 组会先经过路由 agent，再交给 4 个专科 agent 之一
+- `general` 组会直接交给全科综合分析 agent，不做专科路由
+
+### 专科普通接口
+
+`POST /api/v1/specialist/assessment`
 
 请求体示例：
 
@@ -92,9 +111,9 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-### 流式接口
+### 专科流式接口
 
-`POST /api/v1/health-assessment/stream`
+`POST /api/v1/specialist/assessment/stream`
 
 返回类型为 `text/event-stream`，每一段数据格式类似：
 
@@ -122,10 +141,15 @@ data: {"type":"done","agent_name":"mental_social_health","input_tokens":123,"out
 - `.pdf`
 - 图片 OCR：`.png`、`.jpg`、`.jpeg`、`.bmp`、`.tif`、`.tiff`、`.webp`
 
-接口如下：
+专科路由接口：
 
-- `POST /api/v1/health-assessment/files`
-- `POST /api/v1/health-assessment/files/stream`
+- `POST /api/v1/specialist/assessment/files`
+- `POST /api/v1/specialist/assessment/files/stream`
+
+全科综合接口：
+
+- `POST /api/v1/general/assessment/files`
+- `POST /api/v1/general/assessment/files/stream`
 
 这两个接口使用 `multipart/form-data`：
 
@@ -153,12 +177,12 @@ data: {"type":"source","source_summary":"inline_text, report.pdf","preprocessed_
 
 ## Postman 测试说明
 
-### 1. 测普通文本接口
+### 1. 测专科普通文本接口
 
 请求：
 
 - 方法：`POST`
-- URL：`http://127.0.0.1:8000/api/v1/health-assessment`
+- URL：`http://127.0.0.1:8000/api/v1/specialist/assessment`
 - Body 选择 `raw`
 - 格式选择 `JSON`
 
@@ -172,12 +196,12 @@ data: {"type":"source","source_summary":"inline_text, report.pdf","preprocessed_
 
 你会看到模型输出以及 token 统计，还有 `preprocessed_text`。
 
-### 2. 测文本流式接口
+### 2. 测专科文本流式接口
 
 请求：
 
 - 方法：`POST`
-- URL：`http://127.0.0.1:8000/api/v1/health-assessment/stream`
+- URL：`http://127.0.0.1:8000/api/v1/specialist/assessment/stream`
 - Body 选择 `raw`
 - 格式选择 `JSON`
 
@@ -197,12 +221,12 @@ data: {"type":"token","content":"..."}
 data: {"type":"done","input_tokens":123,"output_tokens":456,"total_tokens":579}
 ```
 
-### 3. 测文件上传接口
+### 3. 测专科文件上传接口
 
 请求：
 
 - 方法：`POST`
-- URL：`http://127.0.0.1:8000/api/v1/health-assessment/files`
+- URL：`http://127.0.0.1:8000/api/v1/specialist/assessment/files`
 - Body 选择 `form-data`
 
 字段：
@@ -212,12 +236,12 @@ data: {"type":"done","input_tokens":123,"output_tokens":456,"total_tokens":579}
 
 你可以上传一个或多个 `txt/csv/pdf/图片` 文件。若同时传 `medical_data`，系统会把文本说明和提取出的文件内容合并后再分析。
 
-### 4. 测文件流式接口
+### 4. 测专科文件流式接口
 
 请求：
 
 - 方法：`POST`
-- URL：`http://127.0.0.1:8000/api/v1/health-assessment/files/stream`
+- URL：`http://127.0.0.1:8000/api/v1/specialist/assessment/files/stream`
 - Body 选择 `form-data`
 
 字段同上。
@@ -230,6 +254,42 @@ data: {"type":"token","content":"..."}
 data: {"type":"token","content":"..."}
 data: {"type":"done","input_tokens":123,"output_tokens":456,"total_tokens":579}
 ```
+
+### 5. 测全科普通文本接口
+
+请求：
+
+- 方法：`POST`
+- URL：`http://127.0.0.1:8000/api/v1/general/assessment`
+- Body 选择 `raw`
+- 格式选择 `JSON`
+
+这组接口不会经过专科路由，而是直接由全科综合分析 agent 输出整体建议。
+
+### 6. 测全科流式接口
+
+请求：
+
+- 方法：`POST`
+- URL：`http://127.0.0.1:8000/api/v1/general/assessment/stream`
+- Body 选择 `raw`
+- 格式选择 `JSON`
+
+### 7. 测全科文件上传接口
+
+请求：
+
+- 方法：`POST`
+- URL：`http://127.0.0.1:8000/api/v1/general/assessment/files`
+- Body 选择 `form-data`
+
+### 8. 测全科文件流式接口
+
+请求：
+
+- 方法：`POST`
+- URL：`http://127.0.0.1:8000/api/v1/general/assessment/files/stream`
+- Body 选择 `form-data`
 
 ### 5. 常见问题
 

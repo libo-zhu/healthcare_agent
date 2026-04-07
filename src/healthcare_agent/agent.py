@@ -8,7 +8,12 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_deepseek import ChatDeepSeek
 
 from healthcare_agent.config import DEFAULT_BASE_URL, DEFAULT_MODEL, get_deepseek_api_key
-from healthcare_agent.prompts import ROUTER_AGENT_NAMES, build_router_prompt, build_specialist_prompt
+from healthcare_agent.prompts import (
+    ROUTER_AGENT_NAMES,
+    build_general_health_prompt,
+    build_router_prompt,
+    build_specialist_prompt,
+)
 from healthcare_agent.schemas import AssessmentResult, RouterDecision, TokenUsage
 
 
@@ -33,6 +38,12 @@ def build_specialist_chain(agent_name: str):
     return prompt | model
 
 
+def build_general_health_chain():
+    model = build_chat_model()
+    prompt = build_general_health_prompt()
+    return prompt | model
+
+
 def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
     decision, router_usage = route_to_specialist(medical_data)
     chain = build_specialist_chain(decision.agent_name)
@@ -41,6 +52,16 @@ def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
         agent_name=decision.agent_name,
         content=extract_message_text(message),
         usage=add_token_usage(router_usage, extract_token_usage(message)),
+    )
+
+
+def run_general_health_assessment(medical_data: str) -> AssessmentResult:
+    chain = build_general_health_chain()
+    message = chain.invoke({"medical_data": medical_data})
+    return AssessmentResult(
+        agent_name="general_health_overview",
+        content=extract_message_text(message),
+        usage=extract_token_usage(message),
     )
 
 
@@ -67,6 +88,34 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
     yield {
         "type": "done",
         "agent_name": decision.agent_name,
+        "input_tokens": final_usage.input_tokens,
+        "output_tokens": final_usage.output_tokens,
+        "total_tokens": final_usage.total_tokens,
+    }
+
+
+async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
+    chain = build_general_health_chain()
+    yield {
+        "type": "route",
+        "agent_name": "general_health_overview",
+        "agent_label": "General Health Overview",
+        "reason": "direct generalist assessment",
+    }
+
+    final_usage = TokenUsage()
+    async for chunk in chain.astream({"medical_data": medical_data}):
+        chunk_text = extract_message_text(chunk)
+        if chunk_text:
+            yield {"type": "token", "content": chunk_text}
+
+        chunk_usage = extract_token_usage(chunk)
+        if chunk_usage.total_tokens:
+            final_usage = chunk_usage
+
+    yield {
+        "type": "done",
+        "agent_name": "general_health_overview",
         "input_tokens": final_usage.input_tokens,
         "output_tokens": final_usage.output_tokens,
         "total_tokens": final_usage.total_tokens,

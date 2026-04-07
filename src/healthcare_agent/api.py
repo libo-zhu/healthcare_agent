@@ -7,7 +7,12 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from healthcare_agent.agent import run_healthcare_assessment, stream_healthcare_assessment
+from healthcare_agent.agent import (
+    run_general_health_assessment,
+    run_healthcare_assessment,
+    stream_general_health_assessment,
+    stream_healthcare_assessment,
+)
 from healthcare_agent.schemas import AssessmentRequest, AssessmentResponse
 from healthcare_agent.preprocessing import build_preprocessed_input
 
@@ -32,49 +37,51 @@ def read_root() -> dict[str, str]:
     return {
         "message": "Healthcare Agent API is running.",
         "docs": "/docs",
-        "health_assessment": "/api/v1/health-assessment",
-        "health_assessment_stream": "/api/v1/health-assessment/stream",
-        "health_assessment_files": "/api/v1/health-assessment/files",
-        "health_assessment_stream_files": "/api/v1/health-assessment/files/stream",
+        "specialist_assessment": "/api/v1/specialist/assessment",
+        "specialist_assessment_stream": "/api/v1/specialist/assessment/stream",
+        "specialist_assessment_files": "/api/v1/specialist/assessment/files",
+        "specialist_assessment_stream_files": "/api/v1/specialist/assessment/files/stream",
+        "general_assessment": "/api/v1/general/assessment",
+        "general_assessment_stream": "/api/v1/general/assessment/stream",
+        "general_assessment_files": "/api/v1/general/assessment/files",
+        "general_assessment_stream_files": "/api/v1/general/assessment/files/stream",
     }
 
 
-@app.post("/api/v1/health-assessment", response_model=AssessmentResponse)
-def create_health_assessment(request: AssessmentRequest) -> AssessmentResponse:
-    try:
-        result = run_healthcare_assessment(request.medical_data)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
+def build_assessment_response(
+    result,
+    source_summary: str,
+    preprocessed_text: str,
+    preprocessing_notes: list[str],
+) -> AssessmentResponse:
     return AssessmentResponse(
         content=result.content,
         agent_name=result.agent_name,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
         total_tokens=result.usage.total_tokens,
-        source_summary="inline_text",
-        preprocessed_text=request.medical_data,
-        preprocessing_notes=[],
+        source_summary=source_summary,
+        preprocessed_text=preprocessed_text,
+        preprocessing_notes=preprocessing_notes,
     )
 
 
-async def sse_event_generator(medical_data: str) -> AsyncIterator[str]:
+async def sse_event_generator(
+    medical_data: str,
+    stream_handler,
+) -> AsyncIterator[str]:
     try:
-        async for chunk in stream_healthcare_assessment(medical_data):
-            payload = chunk
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        async for chunk in stream_handler(medical_data):
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
     except Exception as exc:
         payload = {"type": "error", "content": str(exc)}
         yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         return
 
 
-@app.post("/api/v1/health-assessment/stream")
-async def create_streaming_health_assessment(
-    request: AssessmentRequest,
-) -> StreamingResponse:
+def build_streaming_response(event_generator: AsyncIterator[str]) -> StreamingResponse:
     return StreamingResponse(
-        sse_event_generator(request.medical_data),
+        event_generator,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -84,8 +91,32 @@ async def create_streaming_health_assessment(
     )
 
 
-@app.post("/api/v1/health-assessment/files", response_model=AssessmentResponse)
-async def create_health_assessment_from_files(
+@app.post("/api/v1/specialist/assessment", response_model=AssessmentResponse)
+def create_specialist_health_assessment(request: AssessmentRequest) -> AssessmentResponse:
+    try:
+        result = run_healthcare_assessment(request.medical_data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return build_assessment_response(
+        result=result,
+        source_summary="inline_text",
+        preprocessed_text=request.medical_data,
+        preprocessing_notes=[],
+    )
+
+
+@app.post("/api/v1/specialist/assessment/stream")
+async def create_streaming_specialist_health_assessment(
+    request: AssessmentRequest,
+) -> StreamingResponse:
+    return build_streaming_response(
+        sse_event_generator(request.medical_data, stream_healthcare_assessment),
+    )
+
+
+@app.post("/api/v1/specialist/assessment/files", response_model=AssessmentResponse)
+async def create_specialist_health_assessment_from_files(
     medical_data: str | None = Form(default=None),
     files: list[UploadFile] = File(default=[]),
 ) -> AssessmentResponse:
@@ -97,20 +128,16 @@ async def create_health_assessment_from_files(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return AssessmentResponse(
-        content=result.content,
-        agent_name=result.agent_name,
-        input_tokens=result.usage.input_tokens,
-        output_tokens=result.usage.output_tokens,
-        total_tokens=result.usage.total_tokens,
+    return build_assessment_response(
+        result=result,
         source_summary=preprocessed.source_summary,
         preprocessed_text=preprocessed.medical_data,
         preprocessing_notes=preprocessed.notes,
     )
 
 
-@app.post("/api/v1/health-assessment/files/stream")
-async def create_streaming_health_assessment_from_files(
+@app.post("/api/v1/specialist/assessment/files/stream")
+async def create_streaming_specialist_health_assessment_from_files(
     medical_data: str | None = Form(default=None),
     files: list[UploadFile] = File(default=[]),
 ) -> StreamingResponse:
@@ -131,15 +158,87 @@ async def create_streaming_health_assessment_from_files(
             "preprocessing_notes": preprocessed.notes,
         }
         yield f"data: {json.dumps(start_payload, ensure_ascii=False)}\n\n"
-        async for event in sse_event_generator(preprocessed.medical_data):
+        async for event in sse_event_generator(preprocessed.medical_data, stream_healthcare_assessment):
             yield event
 
-    return StreamingResponse(
+    return build_streaming_response(
         file_sse_event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+    )
+
+
+@app.post("/api/v1/general/assessment", response_model=AssessmentResponse)
+def create_general_health_assessment(request: AssessmentRequest) -> AssessmentResponse:
+    try:
+        result = run_general_health_assessment(request.medical_data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return build_assessment_response(
+        result=result,
+        source_summary="inline_text",
+        preprocessed_text=request.medical_data,
+        preprocessing_notes=[],
+    )
+
+
+@app.post("/api/v1/general/assessment/stream")
+async def create_streaming_general_health_assessment(
+    request: AssessmentRequest,
+) -> StreamingResponse:
+    return build_streaming_response(
+        sse_event_generator(request.medical_data, stream_general_health_assessment),
+    )
+
+
+@app.post("/api/v1/general/assessment/files", response_model=AssessmentResponse)
+async def create_general_health_assessment_from_files(
+    medical_data: str | None = Form(default=None),
+    files: list[UploadFile] = File(default=[]),
+) -> AssessmentResponse:
+    try:
+        preprocessed = await build_preprocessed_input(medical_data=medical_data, files=files)
+        result = run_general_health_assessment(preprocessed.medical_data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return build_assessment_response(
+        result=result,
+        source_summary=preprocessed.source_summary,
+        preprocessed_text=preprocessed.medical_data,
+        preprocessing_notes=preprocessed.notes,
+    )
+
+
+@app.post("/api/v1/general/assessment/files/stream")
+async def create_streaming_general_health_assessment_from_files(
+    medical_data: str | None = Form(default=None),
+    files: list[UploadFile] = File(default=[]),
+) -> StreamingResponse:
+    try:
+        preprocessed = await build_preprocessed_input(medical_data=medical_data, files=files)
+    except HTTPException as exc:
+        payload = {"type": "error", "content": exc.detail}
+        return StreamingResponse(
+            iter([f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"]),
+            media_type="text/event-stream",
+        )
+
+    async def file_sse_event_generator() -> AsyncIterator[str]:
+        start_payload = {
+            "type": "source",
+            "source_summary": preprocessed.source_summary,
+            "preprocessed_text": preprocessed.medical_data,
+            "preprocessing_notes": preprocessed.notes,
+        }
+        yield f"data: {json.dumps(start_payload, ensure_ascii=False)}\n\n"
+        async for event in sse_event_generator(
+            preprocessed.medical_data,
+            stream_general_health_assessment,
+        ):
+            yield event
+
+    return build_streaming_response(
+        file_sse_event_generator(),
     )
