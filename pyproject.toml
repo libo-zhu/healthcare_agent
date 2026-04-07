@@ -1,0 +1,15 @@
+[project]
+name = "healthcare-agent"
+version = "0.1.0"
+description = "A small LangChain healthcare assessment agent for DeepSeek API testing."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain==1.2.15",
+    "langchain-deepseek==1.0.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
