@@ -8,7 +8,7 @@
 
 - 按文件拆分了配置、prompt、agent 执行和命令行入口
 - 默认使用 `deepseek-chat`
-- 只做 prompt engineering，不接工具、不接数据库
+- 采用“1 个路由 agent + 4 个专科 agent”的 prompt engineering 结构
 - 直接打印模型输出，用于验证 API 是否正常
 
 ## 运行方式
@@ -83,6 +83,7 @@ http://127.0.0.1:8000/docs
 ```json
 {
   "content": "......",
+  "agent_name": "cardiometabolic_health",
   "input_tokens": 123,
   "output_tokens": 456,
   "total_tokens": 579,
@@ -98,13 +99,14 @@ http://127.0.0.1:8000/docs
 返回类型为 `text/event-stream`，每一段数据格式类似：
 
 ```text
+data: {"type":"route","agent_name":"mental_social_health","agent_label":"Mental Health / SDOH","reason":"..."}
 data: {"type":"token","content":"..."}
 ```
 
 结束时会返回：
 
 ```text
-data: {"type":"done","input_tokens":123,"output_tokens":456,"total_tokens":579}
+data: {"type":"done","agent_name":"mental_social_health","input_tokens":123,"output_tokens":456,"total_tokens":579}
 ```
 
 这条接口适合前端流式渲染，也可以在 Postman 中观察分块输出。

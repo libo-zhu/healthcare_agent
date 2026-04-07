@@ -161,7 +161,31 @@ def fallback_router_decision(raw_text: str) -> RouterDecision:
     for agent_name in ROUTER_AGENT_NAMES:
         if agent_name in lowered:
             return RouterDecision(agent_name=agent_name, reason="fallback parser matched agent name")
+
+    keyword_groups = {
+        "mental_social_health": [
+            "焦虑", "抑郁", "压力", "情绪", "崩溃", "紧张", "失眠", "无助", "答辩", "毕业设计",
+            "经济", "贫困", "家庭", "支持", "医保", "医疗保障", "工作压力", "学习压力",
+        ],
+        "cardiometabolic_health": [
+            "血压", "高压", "低压", "血糖", "空腹血糖", "糖化", "hba1c", "fpg", "血脂",
+            "胆固醇", "甘油三酯", "non-hdl", "高血压", "糖尿病", "内分泌", "甲状腺",
+        ],
+        "diet_bmi": [
+            "bmi", "体重", "肥胖", "超重", "消瘦", "减肥", "减重", "增重", "饮食", "外卖",
+            "热量", "营养", "高盐", "高糖", "高脂", "腰围",
+        ],
+        "sleep_activity_nicotine": [
+            "睡眠", "熬夜", "早醒", "入睡", "打鼾", "运动", "久坐", "活动", "锻炼", "体能",
+            "吸烟", "抽烟", "电子烟", "尼古丁", "二手烟",
+        ],
+    }
+
+    for agent_name, keywords in keyword_groups.items():
+        if any(keyword in lowered for keyword in keywords):
+            return RouterDecision(agent_name=agent_name, reason="fallback keyword router matched input")
+
     return RouterDecision(
-        agent_name="blood_related_issues",
-        reason="fallback defaulted to blood_related_issues",
+        agent_name="cardiometabolic_health",
+        reason="fallback defaulted to cardiometabolic_health",
     )
