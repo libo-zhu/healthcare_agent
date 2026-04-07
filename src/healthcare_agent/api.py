@@ -53,6 +53,7 @@ def create_health_assessment(request: AssessmentRequest) -> AssessmentResponse:
         total_tokens=result.usage.total_tokens,
         source_summary="inline_text",
         preprocessed_text=request.medical_data,
+        preprocessing_notes=[],
     )
 
 
@@ -102,6 +103,7 @@ async def create_health_assessment_from_files(
         total_tokens=result.usage.total_tokens,
         source_summary=preprocessed.source_summary,
         preprocessed_text=preprocessed.medical_data,
+        preprocessing_notes=preprocessed.notes,
     )
 
 
@@ -124,6 +126,7 @@ async def create_streaming_health_assessment_from_files(
             "type": "source",
             "source_summary": preprocessed.source_summary,
             "preprocessed_text": preprocessed.medical_data,
+            "preprocessing_notes": preprocessed.notes,
         }
         yield f"data: {json.dumps(start_payload, ensure_ascii=False)}\n\n"
         async for event in sse_event_generator(preprocessed.medical_data):

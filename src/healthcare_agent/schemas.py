@@ -18,6 +18,7 @@ class AssessmentResponse(BaseModel):
     total_tokens: int = 0
     source_summary: str | None = None
     preprocessed_text: str | None = None
+    preprocessing_notes: list[str] = Field(default_factory=list)
 
 
 class AssessmentResult(BaseModel):
@@ -28,3 +29,4 @@ class AssessmentResult(BaseModel):
 class PreprocessedInput(BaseModel):
     medical_data: str
     source_summary: str
+    notes: list[str] = Field(default_factory=list)
