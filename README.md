@@ -35,6 +35,57 @@ python main.py
 
 程序会提示输入医疗数据；如果你直接回车，会使用内置测试样例。
 
+## FastAPI 接口
+
+安装完成后可以直接启动服务：
+
+```bash
+source .venv/bin/activate
+python run_api.py
+```
+
+服务默认地址：
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger 文档：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### 普通接口
+
+`POST /api/v1/health-assessment`
+
+请求体示例：
+
+```json
+{
+  "medical_data": "患者，45岁，男性，血压148/95 mmHg，空腹血糖6.8 mmol/L，最近经常熬夜，偶尔头晕。"
+}
+```
+
+### 流式接口
+
+`POST /api/v1/health-assessment/stream`
+
+返回类型为 `text/event-stream`，每一段数据格式类似：
+
+```text
+data: {"type":"token","content":"..."}
+```
+
+结束时会返回：
+
+```text
+data: {"type":"done"}
+```
+
+这条接口适合前端流式渲染，也可以在 Postman 中观察分块输出。
+
 ## 安全说明
 
 `.gitignore` 已忽略以下内容：
