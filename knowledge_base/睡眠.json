@@ -3,10 +3,10 @@
   "source": "Hirshkowitz M, Whiton K, Albert SM, et al. National Sleep Foundation’s sleep time duration recommendations: methodology and results summary. Sleep Health: Journal of the National Sleep Foundation. 2015;1(1):40-43.",
   "children": [
     {
-      "topic": "成年人 (18-64岁)",
+      "topic": "成年人睡眠时间 (18-64岁)",
       "children": [
         {
-          "topic": "青年 (18-25岁)",
+          "topic": "青年睡眠时间 (18-25岁)",
           "children": [
             {
               "topic": "推荐 (Recommended)",
@@ -23,7 +23,7 @@
           ]
         },
         {
-          "topic": "成年 (26-64岁)",
+          "topic": "成年睡眠时间 (26-64岁)",
           "children": [
             {
               "topic": "推荐 (Recommended)",
@@ -42,7 +42,7 @@
       ]
     },
     {
-      "topic": "老年人 (≥65岁)",
+      "topic": "老年人睡眠时间 (≥65岁)",
       "children": [
         {
           "topic": "推荐 (Recommended)",
@@ -59,7 +59,7 @@
       ]
     },
     {
-      "topic": "青少年 (14-17岁)",
+      "topic": "青少年睡眠时间 (14-17岁)",
       "children": [
         {
           "topic": "推荐 (Recommended)",
@@ -76,7 +76,7 @@
       ]
     },
     {
-      "topic": "儿童 (6-13岁)",
+      "topic": "儿童睡眠时间 (6-13岁)",
       "children": [
         {
           "topic": "推荐 (Recommended)",
