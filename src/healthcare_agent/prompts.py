@@ -9,6 +9,18 @@ ROUTER_AGENT_NAMES = {
 }
 
 
+RAG_GUARDRAIL_PROMPT = """
+你必须严格依据“知识库检索结果”和“用户提供的原始信息”回答。
+
+硬性要求：
+1. 不允许使用知识库之外的医学结论、阈值、治疗方案或经验性补充
+2. 如果知识库检索结果不足以支持判断，必须明确写出“知识库依据不足”
+3. 可以结合用户原始数据做归纳，但归纳必须能在知识库片段中找到依据
+4. 优先引用知识库片段中的原文意思，不要扩大解释
+5. 回答中出现关键判断或建议时，尽量在句末标注对应来源，例如 [来源1] [来源2]
+""".strip()
+
+
 ROUTER_SYSTEM_PROMPT = """
 你是一个健康评估系统中的分诊路由专家。
 
@@ -163,6 +175,10 @@ GENERAL_HEALTH_SYSTEM_PROMPT = """
 """.strip()
 
 
+def build_grounded_system_prompt(base_prompt: str) -> str:
+    return f"{base_prompt}\n\n{RAG_GUARDRAIL_PROMPT}"
+
+
 def build_router_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages(
         [
@@ -176,13 +192,13 @@ def build_router_prompt() -> ChatPromptTemplate:
 
 
 def build_specialist_prompt(agent_name: str) -> ChatPromptTemplate:
-    system_prompt = SPECIALIST_PROMPTS[agent_name]
+    system_prompt = build_grounded_system_prompt(SPECIALIST_PROMPTS[agent_name])
     return ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
             (
                 "human",
-                "以下是用户提供的医疗数据，请进行健康评估并给出建议：\n{medical_data}",
+                "以下是用户提供的医疗数据：\n{medical_data}\n\n以下是知识库检索结果：\n{knowledge_context}\n\n请严格基于这些内容进行健康评估并给出建议。",
             ),
         ]
     )
@@ -191,10 +207,10 @@ def build_specialist_prompt(agent_name: str) -> ChatPromptTemplate:
 def build_general_health_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages(
         [
-            ("system", GENERAL_HEALTH_SYSTEM_PROMPT),
+            ("system", build_grounded_system_prompt(GENERAL_HEALTH_SYSTEM_PROMPT)),
             (
                 "human",
-                "以下是用户提供的健康相关信息，请进行全科综合健康分析：\n{medical_data}",
+                "以下是用户提供的健康相关信息：\n{medical_data}\n\n以下是知识库检索结果：\n{knowledge_context}\n\n请严格基于这些内容进行全科综合健康分析。",
             ),
         ]
     )

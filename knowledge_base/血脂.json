@@ -1,0 +1,35 @@
+{
+  "topic": "血脂",
+  "children": [
+    {
+      "topic": "低危 (10年ASCVD风险 <5%)",
+      "children": [
+        { "topic": "3.1≤TC<4.1 或 1.8≤LDL-C<2.6", "content": "无高血压且0-3个危险因素；有高血压且0-1个危险因素。" },
+        { "topic": "4.1≤TC<5.2 或 2.6≤LDL-C<3.4", "content": "无高血压且0-2个危险因素；有高血压且0个危险因素。" },
+        { "topic": "5.2≤TC<7.2 或 3.4≤LDL-C<4.9", "content": "无高血压且0-1个危险因素；有高血压且0个危险因素。" }
+      ]
+    },
+    {
+      "topic": "中危 (10年ASCVD风险 5%-9%)",
+      "children": [
+        { "topic": "3.1≤TC<4.1 或 1.8≤LDL-C<2.6", "content": "有高血压且2个危险因素。" },
+        { "topic": "4.1≤TC<5.2 或 2.6≤LDL-C<3.4", "content": "无高血压且3个危险因素；有高血压且1个危险因素。" },
+        { "topic": "5.2≤TC<7.2 或 3.4≤LDL-C<4.9", "content": "无高血压且2-3个危险因素；有高血压且1个危险因素。" }
+      ]
+    },
+    {
+      "topic": "高危 (10年ASCVD风险 ≥10%)",
+      "children": [
+        { "topic": "3.1≤TC<4.1 或 1.8≤LDL-C<2.6", "content": "有高血压且3个危险因素。" },
+        { "topic": "4.1≤TC<5.2 或 2.6≤LDL-C<3.4", "content": "有高血压且2-3个危险因素。" },
+        { "topic": "5.2≤TC<7.2 或 3.4≤LDL-C<4.9", "content": "有高血压且2-3个危险因素。" },
+        { "topic": "特定高危指标", "content": "LDL-C ≥ 4.9mmol/L 或 TC ≥ 7.2mmol/L。" },
+        { "topic": "糖尿病患者标准", "content": "1.8mmol/L ≤ LDL-C < 4.9mmol/L 或 3.1mmol/L ≤ TC < 7.2mmol/L，且年龄 ≥ 40岁。" }
+      ]
+    },
+    {
+      "topic": "极高危",
+      "content": "已确诊为 ASCVD 患者。"
+    }
+  ]
+}

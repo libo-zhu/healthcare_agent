@@ -1,0 +1,26 @@
+{
+  "topic": "血糖",
+  "children": [
+    {
+      "topic": "正常血糖",
+      "content": "空腹血糖 3.9-6.1mmol/L，餐后 2h 血糖 3.9-7.8mmol/L"
+    },
+    {
+      "topic": "空腹血糖受损",
+      "content": "空腹血糖 6.1-7.0mmol/L，餐后 2h 血糖 3.9-7.8mmol/L"
+    },
+    {
+      "topic": "糖耐量受损",
+      "content": "空腹血糖 6.1-7.0mmol/L，餐后 2h 血糖 7.8-11.1mmol/L"
+    },
+    {
+      "topic": "糖尿病",
+      "children": [
+        {
+          "topic": "2型糖尿病",
+          "content": "空腹血糖 ≥ 7.0mmol/L，餐后 2h 血糖 ≥ 11.1mmol/L"
+        }
+      ]
+    }
+  ]
+}

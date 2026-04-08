@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import argparse
+
 from healthcare_agent.agent import run_healthcare_assessment
+from healthcare_agent.knowledge_base import build_knowledge_base_index, get_knowledge_base_status
 
 
 DEFAULT_MEDICAL_DATA = """
@@ -25,6 +28,31 @@ DEFAULT_MEDICAL_DATA = """
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Healthcare agent CLI")
+    parser.add_argument(
+        "--rebuild-kb",
+        action="store_true",
+        help="Build or rebuild the local medical knowledge-base index from JSON files.",
+    )
+    parser.add_argument(
+        "--kb-status",
+        action="store_true",
+        help="Show current knowledge-base status.",
+    )
+    args = parser.parse_args()
+
+    if args.rebuild_kb:
+        result = build_knowledge_base_index(force_rebuild=True)
+        print("\n===== Knowledge Base Rebuilt =====\n")
+        print(result.model_dump_json(indent=2))
+        return
+
+    if args.kb_status:
+        status = get_knowledge_base_status()
+        print("\n===== Knowledge Base Status =====\n")
+        print(status.model_dump_json(indent=2))
+        return
+
     print("请输入用户医疗数据，直接回车则使用默认测试样例：")
     user_input = input("> ").strip()
     medical_data = user_input or DEFAULT_MEDICAL_DATA
@@ -33,4 +61,3 @@ def main() -> None:
 
     print("\n===== DeepSeek 返回结果 =====\n")
     print(result)
-

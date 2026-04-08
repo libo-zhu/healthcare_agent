@@ -13,7 +13,13 @@ from healthcare_agent.agent import (
     stream_general_health_assessment,
     stream_healthcare_assessment,
 )
+from healthcare_agent.knowledge_base import build_knowledge_base_index, get_knowledge_base_status
 from healthcare_agent.schemas import AssessmentRequest, AssessmentResponse
+from healthcare_agent.schemas import (
+    KnowledgeBaseRebuildRequest,
+    KnowledgeBaseRebuildResponse,
+    KnowledgeBaseStatusResponse,
+)
 from healthcare_agent.preprocessing import build_preprocessed_input
 
 
@@ -45,6 +51,8 @@ def read_root() -> dict[str, str]:
         "general_assessment_stream": "/api/v1/general/assessment/stream",
         "general_assessment_files": "/api/v1/general/assessment/files",
         "general_assessment_stream_files": "/api/v1/general/assessment/files/stream",
+        "knowledge_base_status": "/api/v1/knowledge-base/status",
+        "knowledge_base_rebuild": "/api/v1/knowledge-base/rebuild",
     }
 
 
@@ -63,6 +71,7 @@ def build_assessment_response(
         source_summary=source_summary,
         preprocessed_text=preprocessed_text,
         preprocessing_notes=preprocessing_notes,
+        knowledge_chunks=result.knowledge_chunks,
     )
 
 
@@ -163,6 +172,34 @@ async def create_streaming_specialist_health_assessment_from_files(
 
     return build_streaming_response(
         file_sse_event_generator(),
+    )
+
+
+@app.get("/api/v1/knowledge-base/status", response_model=KnowledgeBaseStatusResponse)
+def read_knowledge_base_status() -> KnowledgeBaseStatusResponse:
+    try:
+        status = get_knowledge_base_status()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return KnowledgeBaseStatusResponse(**status.model_dump())
+
+
+@app.post("/api/v1/knowledge-base/rebuild", response_model=KnowledgeBaseRebuildResponse)
+def rebuild_knowledge_base(
+    request: KnowledgeBaseRebuildRequest,
+) -> KnowledgeBaseRebuildResponse:
+    try:
+        build_result = build_knowledge_base_index(force_rebuild=request.force_rebuild)
+        status = get_knowledge_base_status()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return KnowledgeBaseRebuildResponse(
+        message=(
+            f"Knowledge base index rebuilt successfully. Indexed {build_result.indexed_files} files "
+            f"and {build_result.indexed_chunks} chunks."
+        ),
+        **status.model_dump(),
     )
 
 
