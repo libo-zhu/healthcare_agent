@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
+from time import perf_counter
 from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
@@ -49,6 +50,7 @@ def build_general_health_chain():
 
 
 def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
+    start_time = perf_counter()
     decision, router_usage = route_to_specialist(medical_data)
     knowledge_chunks = retrieve_knowledge(medical_data, agent_name=decision.agent_name)
     chain = build_specialist_chain(decision.agent_name)
@@ -62,11 +64,13 @@ def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
         agent_name=decision.agent_name,
         content=extract_message_text(message),
         usage=add_token_usage(router_usage, extract_token_usage(message)),
+        reasoning_time_seconds=round(perf_counter() - start_time, 3),
         knowledge_chunks=to_schema_knowledge_chunks(knowledge_chunks),
     )
 
 
 def run_general_health_assessment(medical_data: str) -> AssessmentResult:
+    start_time = perf_counter()
     knowledge_chunks = retrieve_knowledge(medical_data)
     chain = build_general_health_chain()
     message = chain.invoke(
@@ -79,11 +83,13 @@ def run_general_health_assessment(medical_data: str) -> AssessmentResult:
         agent_name="general_health_overview",
         content=extract_message_text(message),
         usage=extract_token_usage(message),
+        reasoning_time_seconds=round(perf_counter() - start_time, 3),
         knowledge_chunks=to_schema_knowledge_chunks(knowledge_chunks),
     )
 
 
 async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
+    start_time = perf_counter()
     decision, router_usage = route_to_specialist(medical_data)
     knowledge_chunks = retrieve_knowledge(medical_data, agent_name=decision.agent_name)
     yield {
@@ -119,10 +125,12 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
         "input_tokens": final_usage.input_tokens,
         "output_tokens": final_usage.output_tokens,
         "total_tokens": final_usage.total_tokens,
+        "reasoning_time_seconds": round(perf_counter() - start_time, 3),
     }
 
 
 async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
+    start_time = perf_counter()
     knowledge_chunks = retrieve_knowledge(medical_data)
     chain = build_general_health_chain()
     yield {
@@ -157,6 +165,7 @@ async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[d
         "input_tokens": final_usage.input_tokens,
         "output_tokens": final_usage.output_tokens,
         "total_tokens": final_usage.total_tokens,
+        "reasoning_time_seconds": round(perf_counter() - start_time, 3),
     }
 
 

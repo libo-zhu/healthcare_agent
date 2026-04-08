@@ -17,6 +17,7 @@ class AssessmentResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
+    reasoning_time_seconds: float = 0
     source_summary: str | None = None
     preprocessed_text: str | None = None
     preprocessing_notes: list[str] = Field(default_factory=list)
@@ -27,6 +28,7 @@ class AssessmentResult(BaseModel):
     agent_name: str
     content: str
     usage: TokenUsage
+    reasoning_time_seconds: float = 0
     knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
 
 

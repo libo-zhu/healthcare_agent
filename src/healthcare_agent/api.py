@@ -68,6 +68,7 @@ def build_assessment_response(
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
         total_tokens=result.usage.total_tokens,
+        reasoning_time_seconds=result.reasoning_time_seconds,
         source_summary=source_summary,
         preprocessed_text=preprocessed_text,
         preprocessing_notes=preprocessing_notes,
