@@ -65,6 +65,7 @@ def build_assessment_response(
     return AssessmentResponse(
         content=result.content,
         agent_name=result.agent_name,
+        rewritten_query=result.rewritten_query,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
         total_tokens=result.usage.total_tokens,

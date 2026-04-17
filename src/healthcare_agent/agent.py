@@ -16,6 +16,7 @@ from healthcare_agent.knowledge_base import (
 from healthcare_agent.prompts import (
     ROUTER_AGENT_NAMES,
     build_general_health_prompt,
+    build_query_rewrite_prompt,
     build_router_prompt,
     build_specialist_prompt,
 )
@@ -37,6 +38,12 @@ def build_router_chain():
     return prompt | model
 
 
+def build_query_rewrite_chain():
+    model = build_chat_model()
+    prompt = build_query_rewrite_prompt()
+    return prompt | model
+
+
 def build_specialist_chain(agent_name: str):
     model = build_chat_model()
     prompt = build_specialist_prompt(agent_name)
@@ -51,19 +58,24 @@ def build_general_health_chain():
 
 def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
     start_time = perf_counter()
-    decision, router_usage = route_to_specialist(medical_data)
-    knowledge_chunks = retrieve_knowledge(medical_data, agent_name=decision.agent_name)
+    rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
+    decision, router_usage = route_to_specialist(rewritten_query)
+    knowledge_chunks = retrieve_knowledge(rewritten_query, agent_name=decision.agent_name)
     chain = build_specialist_chain(decision.agent_name)
     message = chain.invoke(
         {
-            "medical_data": medical_data,
+            "medical_data": rewritten_query,
             "knowledge_context": format_knowledge_context(knowledge_chunks),
         }
     )
     return AssessmentResult(
         agent_name=decision.agent_name,
         content=extract_message_text(message),
-        usage=add_token_usage(router_usage, extract_token_usage(message)),
+        rewritten_query=rewritten_query,
+        usage=add_token_usage(
+            rewrite_usage,
+            add_token_usage(router_usage, extract_token_usage(message)),
+        ),
         reasoning_time_seconds=round(perf_counter() - start_time, 3),
         knowledge_chunks=to_schema_knowledge_chunks(knowledge_chunks),
     )
@@ -71,18 +83,20 @@ def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
 
 def run_general_health_assessment(medical_data: str) -> AssessmentResult:
     start_time = perf_counter()
-    knowledge_chunks = retrieve_knowledge(medical_data)
+    rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
+    knowledge_chunks = retrieve_knowledge(rewritten_query)
     chain = build_general_health_chain()
     message = chain.invoke(
         {
-            "medical_data": medical_data,
+            "medical_data": rewritten_query,
             "knowledge_context": format_knowledge_context(knowledge_chunks),
         }
     )
     return AssessmentResult(
         agent_name="general_health_overview",
         content=extract_message_text(message),
-        usage=extract_token_usage(message),
+        rewritten_query=rewritten_query,
+        usage=add_token_usage(rewrite_usage, extract_token_usage(message)),
         reasoning_time_seconds=round(perf_counter() - start_time, 3),
         knowledge_chunks=to_schema_knowledge_chunks(knowledge_chunks),
     )
@@ -90,8 +104,13 @@ def run_general_health_assessment(medical_data: str) -> AssessmentResult:
 
 async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
     start_time = perf_counter()
-    decision, router_usage = route_to_specialist(medical_data)
-    knowledge_chunks = retrieve_knowledge(medical_data, agent_name=decision.agent_name)
+    rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
+    decision, router_usage = route_to_specialist(rewritten_query)
+    knowledge_chunks = retrieve_knowledge(rewritten_query, agent_name=decision.agent_name)
+    yield {
+        "type": "rewrite",
+        "rewritten_query": rewritten_query,
+    }
     yield {
         "type": "route",
         "agent_name": decision.agent_name,
@@ -104,10 +123,10 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
     }
 
     chain = build_specialist_chain(decision.agent_name)
-    final_usage = router_usage
+    final_usage = add_token_usage(rewrite_usage, router_usage)
     async for chunk in chain.astream(
         {
-            "medical_data": medical_data,
+            "medical_data": rewritten_query,
             "knowledge_context": format_knowledge_context(knowledge_chunks),
         }
     ):
@@ -117,11 +136,15 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
 
         chunk_usage = extract_token_usage(chunk)
         if chunk_usage.total_tokens:
-            final_usage = add_token_usage(router_usage, chunk_usage)
+            final_usage = add_token_usage(
+                rewrite_usage,
+                add_token_usage(router_usage, chunk_usage),
+            )
 
     yield {
         "type": "done",
         "agent_name": decision.agent_name,
+        "rewritten_query": rewritten_query,
         "input_tokens": final_usage.input_tokens,
         "output_tokens": final_usage.output_tokens,
         "total_tokens": final_usage.total_tokens,
@@ -131,8 +154,13 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
 
 async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
     start_time = perf_counter()
-    knowledge_chunks = retrieve_knowledge(medical_data)
+    rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
+    knowledge_chunks = retrieve_knowledge(rewritten_query)
     chain = build_general_health_chain()
+    yield {
+        "type": "rewrite",
+        "rewritten_query": rewritten_query,
+    }
     yield {
         "type": "route",
         "agent_name": "general_health_overview",
@@ -144,10 +172,10 @@ async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[d
         "chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(knowledge_chunks)],
     }
 
-    final_usage = TokenUsage()
+    final_usage = rewrite_usage
     async for chunk in chain.astream(
         {
-            "medical_data": medical_data,
+            "medical_data": rewritten_query,
             "knowledge_context": format_knowledge_context(knowledge_chunks),
         }
     ):
@@ -157,11 +185,12 @@ async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[d
 
         chunk_usage = extract_token_usage(chunk)
         if chunk_usage.total_tokens:
-            final_usage = chunk_usage
+            final_usage = add_token_usage(rewrite_usage, chunk_usage)
 
     yield {
         "type": "done",
         "agent_name": "general_health_overview",
+        "rewritten_query": rewritten_query,
         "input_tokens": final_usage.input_tokens,
         "output_tokens": final_usage.output_tokens,
         "total_tokens": final_usage.total_tokens,
@@ -175,6 +204,14 @@ def route_to_specialist(medical_data: str) -> tuple[RouterDecision, TokenUsage]:
     decision = parse_router_decision(extract_message_text(message))
     usage = extract_token_usage(message)
     return decision, usage
+
+
+def rewrite_medical_data(medical_data: str) -> tuple[str, TokenUsage]:
+    chain = build_query_rewrite_chain()
+    message = chain.invoke({"medical_data": medical_data})
+    rewritten_query = extract_message_text(message).strip() or medical_data.strip()
+    usage = extract_token_usage(message)
+    return rewritten_query, usage
 
 
 def extract_message_text(message: BaseMessage | AIMessageChunk | str) -> str:
@@ -257,7 +294,6 @@ def fallback_router_decision(raw_text: str) -> RouterDecision:
     for agent_name in ROUTER_AGENT_NAMES:
         if agent_name in lowered:
             return RouterDecision(agent_name=agent_name, reason="fallback parser matched agent name")
-
     keyword_groups = {
         "mental_social_health": [
             "焦虑", "抑郁", "压力", "情绪", "崩溃", "紧张", "失眠", "无助", "答辩", "毕业设计",
@@ -287,7 +323,7 @@ def fallback_router_decision(raw_text: str) -> RouterDecision:
     )
 
 
-def to_schema_knowledge_chunks(chunks) -> list[KnowledgeChunk]:
+def to_schema_knowledge_chunks(chunks: list[Any]) -> list[KnowledgeChunk]:
     return [
         KnowledgeChunk(
             source_file=chunk.source_file,

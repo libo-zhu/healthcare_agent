@@ -14,6 +14,7 @@ class TokenUsage(BaseModel):
 class AssessmentResponse(BaseModel):
     content: str
     agent_name: str
+    rewritten_query: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
@@ -27,6 +28,7 @@ class AssessmentResponse(BaseModel):
 class AssessmentResult(BaseModel):
     agent_name: str
     content: str
+    rewritten_query: str | None = None
     usage: TokenUsage
     reasoning_time_seconds: float = 0
     knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
