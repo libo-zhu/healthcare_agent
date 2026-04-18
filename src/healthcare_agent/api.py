@@ -74,6 +74,8 @@ def build_assessment_response(
         preprocessed_text=preprocessed_text,
         preprocessing_notes=preprocessing_notes,
         knowledge_chunks=result.knowledge_chunks,
+        coarse_knowledge_chunks=result.coarse_knowledge_chunks,
+        reranked_knowledge_chunks=result.reranked_knowledge_chunks,
     )
 
 

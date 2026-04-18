@@ -11,7 +11,10 @@ DEFAULT_KNOWLEDGE_BASE_DIR = PROJECT_ROOT / "knowledge_base"
 DEFAULT_CHROMA_PERSIST_DIR = PROJECT_ROOT / ".chroma" / "medical_kb"
 DEFAULT_VECTOR_COLLECTION_NAME = "medical_knowledge"
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"
-DEFAULT_RAG_TOP_K = 4
+DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-base"
+DEFAULT_RAG_TOP_K = 5
+DEFAULT_RAG_COARSE_TOP_K = 20
+DEFAULT_RAG_RERANK_TOP_K = 5
 
 
 def load_dotenv(dotenv_path: str = ".env") -> None:

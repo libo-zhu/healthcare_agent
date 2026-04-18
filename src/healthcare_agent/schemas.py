@@ -23,6 +23,8 @@ class AssessmentResponse(BaseModel):
     preprocessed_text: str | None = None
     preprocessing_notes: list[str] = Field(default_factory=list)
     knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    coarse_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    reranked_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
 
 
 class AssessmentResult(BaseModel):
@@ -32,6 +34,8 @@ class AssessmentResult(BaseModel):
     usage: TokenUsage
     reasoning_time_seconds: float = 0
     knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    coarse_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    reranked_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
 
 
 class PreprocessedInput(BaseModel):
@@ -50,6 +54,8 @@ class KnowledgeChunk(BaseModel):
     section_path: str
     content: str
     score: float | None = None
+    vector_score: float | None = None
+    rerank_score: float | None = None
 
 
 class KnowledgeBaseRebuildRequest(BaseModel):

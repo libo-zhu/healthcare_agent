@@ -60,12 +60,12 @@ def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
     decision, router_usage = route_to_specialist(rewritten_query)
-    knowledge_chunks = retrieve_knowledge(rewritten_query, agent_name=decision.agent_name)
+    retrieval = retrieve_knowledge(rewritten_query, agent_name=decision.agent_name)
     chain = build_specialist_chain(decision.agent_name)
     message = chain.invoke(
         {
             "medical_data": rewritten_query,
-            "knowledge_context": format_knowledge_context(knowledge_chunks),
+            "knowledge_context": format_knowledge_context(retrieval.final_chunks),
         }
     )
     return AssessmentResult(
@@ -77,19 +77,21 @@ def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
             add_token_usage(router_usage, extract_token_usage(message)),
         ),
         reasoning_time_seconds=round(perf_counter() - start_time, 3),
-        knowledge_chunks=to_schema_knowledge_chunks(knowledge_chunks),
+        knowledge_chunks=to_schema_knowledge_chunks(retrieval.final_chunks),
+        coarse_knowledge_chunks=to_schema_knowledge_chunks(retrieval.coarse_chunks),
+        reranked_knowledge_chunks=to_schema_knowledge_chunks(retrieval.reranked_chunks),
     )
 
 
 def run_general_health_assessment(medical_data: str) -> AssessmentResult:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
-    knowledge_chunks = retrieve_knowledge(rewritten_query)
+    retrieval = retrieve_knowledge(rewritten_query)
     chain = build_general_health_chain()
     message = chain.invoke(
         {
             "medical_data": rewritten_query,
-            "knowledge_context": format_knowledge_context(knowledge_chunks),
+            "knowledge_context": format_knowledge_context(retrieval.final_chunks),
         }
     )
     return AssessmentResult(
@@ -98,7 +100,9 @@ def run_general_health_assessment(medical_data: str) -> AssessmentResult:
         rewritten_query=rewritten_query,
         usage=add_token_usage(rewrite_usage, extract_token_usage(message)),
         reasoning_time_seconds=round(perf_counter() - start_time, 3),
-        knowledge_chunks=to_schema_knowledge_chunks(knowledge_chunks),
+        knowledge_chunks=to_schema_knowledge_chunks(retrieval.final_chunks),
+        coarse_knowledge_chunks=to_schema_knowledge_chunks(retrieval.coarse_chunks),
+        reranked_knowledge_chunks=to_schema_knowledge_chunks(retrieval.reranked_chunks),
     )
 
 
@@ -106,7 +110,7 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
     start_time = perf_counter()
     rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
     decision, router_usage = route_to_specialist(rewritten_query)
-    knowledge_chunks = retrieve_knowledge(rewritten_query, agent_name=decision.agent_name)
+    retrieval = retrieve_knowledge(rewritten_query, agent_name=decision.agent_name)
     yield {
         "type": "rewrite",
         "rewritten_query": rewritten_query,
@@ -119,7 +123,9 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
     }
     yield {
         "type": "knowledge",
-        "chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(knowledge_chunks)],
+        "chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(retrieval.final_chunks)],
+        "coarse_chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(retrieval.coarse_chunks)],
+        "reranked_chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(retrieval.reranked_chunks)],
     }
 
     chain = build_specialist_chain(decision.agent_name)
@@ -127,7 +133,7 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
     async for chunk in chain.astream(
         {
             "medical_data": rewritten_query,
-            "knowledge_context": format_knowledge_context(knowledge_chunks),
+            "knowledge_context": format_knowledge_context(retrieval.final_chunks),
         }
     ):
         chunk_text = extract_message_text(chunk)
@@ -155,7 +161,7 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
 async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = rewrite_medical_data(medical_data)
-    knowledge_chunks = retrieve_knowledge(rewritten_query)
+    retrieval = retrieve_knowledge(rewritten_query)
     chain = build_general_health_chain()
     yield {
         "type": "rewrite",
@@ -169,14 +175,16 @@ async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[d
     }
     yield {
         "type": "knowledge",
-        "chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(knowledge_chunks)],
+        "chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(retrieval.final_chunks)],
+        "coarse_chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(retrieval.coarse_chunks)],
+        "reranked_chunks": [chunk.model_dump() for chunk in to_schema_knowledge_chunks(retrieval.reranked_chunks)],
     }
 
     final_usage = rewrite_usage
     async for chunk in chain.astream(
         {
             "medical_data": rewritten_query,
-            "knowledge_context": format_knowledge_context(knowledge_chunks),
+            "knowledge_context": format_knowledge_context(retrieval.final_chunks),
         }
     ):
         chunk_text = extract_message_text(chunk)
@@ -330,6 +338,8 @@ def to_schema_knowledge_chunks(chunks: list[Any]) -> list[KnowledgeChunk]:
             section_path=chunk.section_path,
             content=chunk.content,
             score=chunk.score,
+            vector_score=getattr(chunk, "vector_score", None),
+            rerank_score=getattr(chunk, "rerank_score", None),
         )
         for chunk in chunks
     ]

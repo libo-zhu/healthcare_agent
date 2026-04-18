@@ -6,13 +6,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from healthcare_agent.config import (
     DEFAULT_CHROMA_PERSIST_DIR,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_KNOWLEDGE_BASE_DIR,
+    DEFAULT_RAG_COARSE_TOP_K,
+    DEFAULT_RAG_RERANK_TOP_K,
     DEFAULT_RAG_TOP_K,
+    DEFAULT_RERANKER_MODEL,
     DEFAULT_VECTOR_COLLECTION_NAME,
     get_bool_env,
     get_int_env,
@@ -25,6 +28,17 @@ class RetrievedKnowledgeChunk(BaseModel):
     section_path: str
     content: str
     score: float | None = None
+    vector_score: float | None = None
+    rerank_score: float | None = None
+
+
+class RetrievalResult(BaseModel):
+    coarse_chunks: list[RetrievedKnowledgeChunk] = Field(default_factory=list)
+    reranked_chunks: list[RetrievedKnowledgeChunk] = Field(default_factory=list)
+
+    @property
+    def final_chunks(self) -> list[RetrievedKnowledgeChunk]:
+        return self.reranked_chunks
 
 
 class KnowledgeBaseBuildResult(BaseModel):
@@ -58,9 +72,22 @@ def get_rag_top_k() -> int:
     return get_int_env("RAG_TOP_K", DEFAULT_RAG_TOP_K)
 
 
+def get_rag_coarse_top_k() -> int:
+    return get_int_env("RAG_COARSE_TOP_K", DEFAULT_RAG_COARSE_TOP_K)
+
+
+def get_rag_rerank_top_k() -> int:
+    return get_int_env("RAG_RERANK_TOP_K", DEFAULT_RAG_RERANK_TOP_K)
+
+
 def get_embedding_model_name() -> str:
     load_dotenv()
     return os.environ.get("EMBEDDING_MODEL_NAME", DEFAULT_EMBEDDING_MODEL)
+
+
+def get_reranker_model_name() -> str:
+    load_dotenv()
+    return os.environ.get("RERANKER_MODEL_NAME", DEFAULT_RERANKER_MODEL)
 
 
 def get_knowledge_base_dir() -> Path:
@@ -81,6 +108,7 @@ def get_vector_collection_name() -> str:
 def ensure_supported_dependencies() -> None:
     try:
         import chromadb  # noqa: F401
+        from sentence_transformers import CrossEncoder  # noqa: F401
         from sentence_transformers import SentenceTransformer  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
@@ -97,6 +125,14 @@ def get_embedding_model():
 
 
 @lru_cache(maxsize=1)
+def get_reranker_model():
+    ensure_supported_dependencies()
+    from sentence_transformers import CrossEncoder
+
+    return CrossEncoder(get_reranker_model_name())
+
+
+@lru_cache(maxsize=1)
 def get_chroma_client():
     ensure_supported_dependencies()
     import chromadb
@@ -108,6 +144,7 @@ def get_chroma_client():
 
 def clear_rag_caches() -> None:
     get_embedding_model.cache_clear()
+    get_reranker_model.cache_clear()
     get_chroma_client.cache_clear()
 
 
@@ -205,40 +242,78 @@ def retrieve_knowledge(
     query: str,
     agent_name: str | None = None,
     top_k: int | None = None,
-) -> list[RetrievedKnowledgeChunk]:
+) -> RetrievalResult:
     if not is_rag_enabled():
-        return []
+        return RetrievalResult()
 
     ensure_index_ready()
     collection = get_collection()
     if collection.count() == 0:
-        return []
+        return RetrievalResult()
 
     search_query = build_search_query(query=query, agent_name=agent_name)
     query_embedding = get_embedding_model().encode(
         [search_query], normalize_embeddings=True
     ).tolist()[0]
+    coarse_top_k = min(collection.count(), max(top_k or get_rag_coarse_top_k(), 1))
     result = collection.query(
         query_embeddings=[query_embedding],
-        n_results=top_k or get_rag_top_k(),
+        n_results=coarse_top_k,
         include=["documents", "metadatas", "distances"],
     )
 
     documents = result.get("documents", [[]])[0]
     metadatas = result.get("metadatas", [[]])[0]
     distances = result.get("distances", [[]])[0]
-    chunks: list[RetrievedKnowledgeChunk] = []
+    coarse_chunks: list[RetrievedKnowledgeChunk] = []
     for document, metadata, distance in zip(documents, metadatas, distances):
-        score = None if distance is None else max(0.0, 1.0 - float(distance))
-        chunks.append(
+        vector_score = None if distance is None else max(0.0, 1.0 - float(distance))
+        coarse_chunks.append(
             RetrievedKnowledgeChunk(
                 source_file=str(metadata.get("source_file", "")),
                 section_path=str(metadata.get("section_path", "")),
                 content=str(document),
-                score=score,
+                score=vector_score,
+                vector_score=vector_score,
             )
         )
-    return chunks
+    reranked_chunks = rerank_knowledge_chunks(
+        query=search_query,
+        chunks=coarse_chunks,
+        top_k=min(len(coarse_chunks), max(top_k or get_rag_rerank_top_k(), 1)),
+    )
+    return RetrievalResult(
+        coarse_chunks=coarse_chunks,
+        reranked_chunks=reranked_chunks,
+    )
+
+
+def rerank_knowledge_chunks(
+    query: str,
+    chunks: list[RetrievedKnowledgeChunk],
+    top_k: int,
+) -> list[RetrievedKnowledgeChunk]:
+    if not chunks or top_k <= 0:
+        return []
+
+    model = get_reranker_model()
+    pairs = [(query, chunk.content) for chunk in chunks]
+    scores = model.predict(pairs, batch_size=8, show_progress_bar=False)
+
+    reranked = [
+        chunk.model_copy(
+            update={
+                "score": float(score),
+                "rerank_score": float(score),
+            }
+        )
+        for chunk, score in zip(chunks, scores)
+    ]
+    reranked.sort(
+        key=lambda chunk: chunk.rerank_score if chunk.rerank_score is not None else float("-inf"),
+        reverse=True,
+    )
+    return reranked[:top_k]
 
 
 def format_knowledge_context(chunks: list[RetrievedKnowledgeChunk]) -> str:
