@@ -1,0 +1,229 @@
+{
+  "topic": "心理健康与社会决定因素（SDOH）",
+  "children": [
+    {
+      "topic": "抑郁快速筛查与分层",
+      "source": "Kroenke K, Spitzer RL, Williams JBW. The PHQ-9: validity of a brief depression severity measure. J Gen Intern Med. 2001;16(9):606-613. doi:10.1046/j.1525-1497.2001.016009606.x; Lowe B, Kroenke K, Grafe K. Detecting and monitoring depression with a two-item questionnaire (PHQ-2). J Psychosom Res. 2005;58(2):163-171. doi:10.1016/j.jpsychores.2004.09.006.",
+      "children": [
+        {
+          "topic": "PHQ-2 初筛",
+          "content": "PHQ-2 由抑郁心境和兴趣减退两个核心条目组成，总分 0-6 分。一般可将 PHQ-2 >= 3 视为抑郁筛查阳性，阳性后宜进一步完成 PHQ-9 或临床访谈，而不能直接作为确诊依据。"
+        },
+        {
+          "topic": "PHQ-9 严重度分层",
+          "children": [
+            {
+              "topic": "最小或无明显抑郁症状",
+              "content": "0-4 分"
+            },
+            {
+              "topic": "轻度抑郁症状",
+              "content": "5-9 分"
+            },
+            {
+              "topic": "中度抑郁症状",
+              "content": "10-14 分"
+            },
+            {
+              "topic": "中重度抑郁症状",
+              "content": "15-19 分"
+            },
+            {
+              "topic": "重度抑郁症状",
+              "content": "20-27 分"
+            }
+          ]
+        },
+        {
+          "topic": "PHQ-9 关键解释",
+          "content": "PHQ-9 的 5、10、15、20 分常作为轻度、中度、中重度和重度抑郁症状的下限。PHQ-9 >= 10 对识别可能的重性抑郁具有较好筛查效能，但仍属于筛查阈值，不等于精神科诊断。"
+        }
+      ]
+    },
+    {
+      "topic": "焦虑快速筛查与分层",
+      "source": "Spitzer RL, Kroenke K, Williams JBW, Lowe B. A Brief Measure for Assessing Generalized Anxiety Disorder: The GAD-7. Arch Intern Med. 2006;166(10):1092-1097. doi:10.1001/archinte.166.10.1092; Luo Z, Li Y, Hou Y, et al. Adaptation of the two-item generalized anxiety disorder scale (GAD-2) to Chinese rural population: A validation study and meta-analysis. Gen Hosp Psychiatry. 2019;60:50-56. doi:10.1016/j.genhosppsych.2019.07.008.",
+      "children": [
+        {
+          "topic": "GAD-2 初筛",
+          "content": "GAD-2 总分 0-6 分。GAD-2 >= 3 常作为焦虑筛查阳性阈值，阳性后宜继续使用 GAD-7 或进一步临床评估。"
+        },
+        {
+          "topic": "GAD-7 严重度分层",
+          "children": [
+            {
+              "topic": "最小焦虑",
+              "content": "0-4 分"
+            },
+            {
+              "topic": "轻度焦虑",
+              "content": "5-9 分"
+            },
+            {
+              "topic": "中度焦虑",
+              "content": "10-14 分"
+            },
+            {
+              "topic": "重度焦虑",
+              "content": "15-21 分"
+            }
+          ]
+        },
+        {
+          "topic": "GAD-7 关键解释",
+          "content": "GAD-7 >= 10 是识别可能广泛性焦虑障碍的常用筛查阈值；5、10、15 分常分别对应轻度、中度和重度焦虑。分数越高，功能受损、就医频率和症状相关困难通常越明显。"
+        }
+      ]
+    },
+    {
+      "topic": "焦虑抑郁合并快速筛查（PHQ-4）",
+      "source": "Kroenke K, Spitzer RL, Williams JBW, Lowe B. An ultra-brief screening scale for anxiety and depression: the PHQ-4. Psychosomatics. 2009;50(6):613-621. doi:10.1176/appi.psy.50.6.613; Lowe B, Wahl I, Rose M, et al. A 4-item measure of depression and anxiety: validation and standardization of the Patient Health Questionnaire-4 (PHQ-4) in the general population. J Affect Disord. 2010;122(1-2):86-95. doi:10.1016/j.jad.2009.06.019.",
+      "children": [
+        {
+          "topic": "PHQ-4 总分解释",
+          "children": [
+            {
+              "topic": "无明显心理痛苦",
+              "content": "0-2 分"
+            },
+            {
+              "topic": "轻度心理痛苦",
+              "content": "3-5 分"
+            },
+            {
+              "topic": "中度心理痛苦",
+              "content": "6-8 分"
+            },
+            {
+              "topic": "重度心理痛苦",
+              "content": "9-12 分"
+            }
+          ]
+        },
+        {
+          "topic": "PHQ-4 子量表解释",
+          "content": "PHQ-4 由 GAD-2 与 PHQ-2 组成。焦虑子量表或抑郁子量表单独 >= 3 分时，可视为对应方向的筛查阳性，需要继续做更完整的量表或临床访谈。"
+        }
+      ]
+    },
+    {
+      "topic": "感知压力评估（PSS）",
+      "source": "Cohen S, Kamarck T, Mermelstein R. A Global Measure of Perceived Stress. J Health Soc Behav. 1983;24(4):385-396. doi:10.2307/2136404; National Cancer Institute, Perceived Stress Scale measure summary.",
+      "children": [
+        {
+          "topic": "评估重点",
+          "content": "PSS 用于评估个体对生活事件的主观压力体验，核心关注不可预测感、不可控制感和负荷过重感。"
+        },
+        {
+          "topic": "计分特点",
+          "content": "经典 PSS 为 14 个条目，每题按 0-4 分计分；其中正向表述条目需要反向计分后求和。"
+        },
+        {
+          "topic": "使用场景",
+          "content": "PSS 更适合评估近期总体压力负担、学习或工作压力对健康行为的影响，以及干预前后的变化趋势；它不是针对某一精神障碍的诊断量表。"
+        }
+      ]
+    },
+    {
+      "topic": "心理高风险信号与安全评估",
+      "source": "The Joint Commission. Suicide Prevention Resources to support Joint Commission Accredited Organizations. 2020; Na PJ, Yaramala SR, Kim JA, et al. The PHQ-9 Item 9 based screening for suicide risk: a validation study of the PHQ-9 Item 9 with the C-SSRS. J Affect Disord. 2018;232:34-40. doi:10.1016/j.jad.2018.02.045.",
+      "children": [
+        {
+          "topic": "需要立即提高警惕的信号",
+          "content": "包括持续显著情绪低落、明显兴趣缺失、功能快速下降、强烈无助感、近期严重失眠、显著社交退缩、近期暴力或虐待暴露，以及自伤或自杀相关想法。"
+        },
+        {
+          "topic": "PHQ-9 第9项的意义",
+          "content": "PHQ-9 第 9 项涉及死亡或自伤相关想法。只要该项不是 0 分，就应立即进一步做面对面的安全评估、了解是否存在计划和近期行为风险。"
+        },
+        {
+          "topic": "风险评估边界",
+          "content": "PHQ-9 第 9 项可作为警示信号，但不能替代专门的自杀风险评估工具或完整临床评估。"
+        },
+        {
+          "topic": "紧急转介提示",
+          "content": "如存在明确自杀计划、近期自伤行为、精神病性症状、躁狂状态、无法照料自己、现实暴力威胁或人身安全风险，应优先启动紧急精神科评估或急诊处置。"
+        }
+      ]
+    },
+    {
+      "topic": "社会决定因素（SDOH）总体框架",
+      "source": "Healthy People 2030, U.S. Department of Health and Human Services, Office of Disease Prevention and Health Promotion.",
+      "children": [
+        {
+          "topic": "五大领域",
+          "children": [
+            {
+              "topic": "经济稳定",
+              "content": "收入、债务、就业稳定性、基本生活开支压力等。"
+            },
+            {
+              "topic": "教育获得与质量",
+              "content": "教育机会、健康素养、语言与理解能力等。"
+            },
+            {
+              "topic": "医疗可及性与质量",
+              "content": "是否有保险、就医便利性、能否按时复诊取药、是否容易获得连续照护。"
+            },
+            {
+              "topic": "邻里与建成环境",
+              "content": "住房条件、居住稳定性、交通、运动空间、环境安全、噪音与污染暴露等。"
+            },
+            {
+              "topic": "社会与社区环境",
+              "content": "家庭支持、社会支持、歧视经历、社区联系、暴力暴露与人际安全等。"
+            }
+          ]
+        },
+        {
+          "topic": "健康影响",
+          "content": "SDOH 会影响疾病风险、生活方式执行能力、复诊依从性、心理健康和整体生活质量，因此在健康评估中应与症状和指标一起解读。"
+        }
+      ]
+    },
+    {
+      "topic": "临床常用 SDOH 核心筛查域（AHC HRSN）",
+      "source": "Centers for Medicare & Medicaid Services. The Accountable Health Communities Health-Related Social Needs Screening Tool; Billioux A, Verlander K, Anthony S, Alley D. Standardized Screening for Health-Related Social Needs in Clinical Settings: The Accountable Health Communities Screening Tool. NAM Perspectives. 2017.",
+      "children": [
+        {
+          "topic": "住房不稳定",
+          "content": "关注无固定住所、频繁搬家、担心失去住房、居住拥挤或住房条件不安全。"
+        },
+        {
+          "topic": "食物不足",
+          "content": "关注食物不够吃、担心食物在发薪前耗尽、因经济原因无法持续获得足够食物。"
+        },
+        {
+          "topic": "交通困难",
+          "content": "关注缺乏可靠交通导致无法就医、上学、上班或完成基本生活事务。"
+        },
+        {
+          "topic": "公用事业困难",
+          "content": "关注电、水、燃气、取暖等基本家庭服务存在被停供风险或已中断。"
+        },
+        {
+          "topic": "人际安全",
+          "content": "关注家庭或熟人暴力、被威胁、被辱骂、身体伤害或居住环境中的安全问题。"
+        },
+        {
+          "topic": "结果解释",
+          "content": "任一核心筛查域阳性，都提示健康相关社会需求可能已对治疗依从性、饮食睡眠、情绪状态或慢病管理造成现实影响，宜进一步评估资源连接需求。"
+        }
+      ]
+    },
+    {
+      "topic": "可补充评估的 SDOH 扩展域",
+      "source": "Centers for Medicare & Medicaid Services. The Accountable Health Communities Health-Related Social Needs Screening Tool.",
+      "children": [
+        {
+          "topic": "扩展领域",
+          "content": "可根据实际场景补充评估经济压力、就业、家庭与社区支持、教育、身体活动、物质使用、心理健康和残障等领域。"
+        },
+        {
+          "topic": "适用情形",
+          "content": "当用户反复提及学业或工作负担、经济焦虑、照护者压力、缺乏支持网络、就医困难或功能受限时，应考虑在核心五域之外做扩展评估。"
+        }
+      ]
+    }
+  ]
+}
