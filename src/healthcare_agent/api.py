@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from healthcare_agent.agent import (
+    arun_general_health_assessment,
+    arun_healthcare_assessment,
     run_general_health_assessment,
     run_healthcare_assessment,
     stream_general_health_assessment,
@@ -65,6 +67,8 @@ def build_assessment_response(
     return AssessmentResponse(
         content=result.content,
         agent_name=result.agent_name,
+        routed_agent_names=result.routed_agent_names,
+        route_reason=result.route_reason,
         rewritten_query=result.rewritten_query,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
@@ -76,6 +80,7 @@ def build_assessment_response(
         knowledge_chunks=result.knowledge_chunks,
         coarse_knowledge_chunks=result.coarse_knowledge_chunks,
         reranked_knowledge_chunks=result.reranked_knowledge_chunks,
+        specialist_assessments=result.specialist_assessments,
     )
 
 
@@ -135,7 +140,7 @@ async def create_specialist_health_assessment_from_files(
 ) -> AssessmentResponse:
     try:
         preprocessed = await build_preprocessed_input(medical_data=medical_data, files=files)
-        result = run_healthcare_assessment(preprocessed.medical_data)
+        result = await arun_healthcare_assessment(preprocessed.medical_data)
     except HTTPException:
         raise
     except Exception as exc:
@@ -238,7 +243,7 @@ async def create_general_health_assessment_from_files(
 ) -> AssessmentResponse:
     try:
         preprocessed = await build_preprocessed_input(medical_data=medical_data, files=files)
-        result = run_general_health_assessment(preprocessed.medical_data)
+        result = await arun_general_health_assessment(preprocessed.medical_data)
     except HTTPException:
         raise
     except Exception as exc:

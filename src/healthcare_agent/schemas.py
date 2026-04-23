@@ -14,6 +14,8 @@ class TokenUsage(BaseModel):
 class AssessmentResponse(BaseModel):
     content: str
     agent_name: str
+    routed_agent_names: list[str] = Field(default_factory=list)
+    route_reason: str = ""
     rewritten_query: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
@@ -25,10 +27,13 @@ class AssessmentResponse(BaseModel):
     knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
     coarse_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
     reranked_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    specialist_assessments: list["SpecialistAssessment"] = Field(default_factory=list)
 
 
 class AssessmentResult(BaseModel):
     agent_name: str
+    routed_agent_names: list[str] = Field(default_factory=list)
+    route_reason: str = ""
     content: str
     rewritten_query: str | None = None
     usage: TokenUsage
@@ -36,6 +41,7 @@ class AssessmentResult(BaseModel):
     knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
     coarse_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
     reranked_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    specialist_assessments: list["SpecialistAssessment"] = Field(default_factory=list)
 
 
 class PreprocessedInput(BaseModel):
@@ -45,8 +51,19 @@ class PreprocessedInput(BaseModel):
 
 
 class RouterDecision(BaseModel):
-    agent_name: str
+    agent_names: list[str] = Field(default_factory=list)
     reason: str = ""
+
+
+class SpecialistAssessment(BaseModel):
+    agent_name: str
+    agent_label: str
+    content: str
+    usage: TokenUsage
+    reasoning_time_seconds: float = 0
+    knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    coarse_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
+    reranked_knowledge_chunks: list["KnowledgeChunk"] = Field(default_factory=list)
 
 
 class KnowledgeChunk(BaseModel):
