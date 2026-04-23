@@ -1,5 +1,6 @@
 {
   "topic": "运动计划与活动量评估",
+  "agent_tags": ["sleep_activity_nicotine"],
   "children": [
     {
       "topic": "运动计划",

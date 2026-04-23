@@ -1,5 +1,6 @@
 {
   "topic": "睡眠时间指南 (National Sleep Foundation)",
+  "agent_tags": ["sleep_activity_nicotine"],
   "source": "Hirshkowitz M, Whiton K, Albert SM, et al. National Sleep Foundation’s sleep time duration recommendations: methodology and results summary. Sleep Health: Journal of the National Sleep Foundation. 2015;1(1):40-43.",
   "children": [
     {

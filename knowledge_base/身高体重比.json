@@ -1,5 +1,6 @@
 {
   "topic": "身高体重比 BMI",
+  "agent_tags": ["diet_bmi"],
   "children": [
     {
       "topic": "BMI 分类标准 (中国成人)",

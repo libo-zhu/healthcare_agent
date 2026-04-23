@@ -1,5 +1,6 @@
 {
   "topic": "2020 ADA 美国糖尿病医学诊疗标准",
+  "agent_tags": ["cardiometabolic_health", "diet_bmi", "sleep_activity_nicotine"],
   "children": [
     {
       "topic": "常规治疗",

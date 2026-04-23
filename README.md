@@ -50,6 +50,7 @@ knowledge_base/
 ```json
 {
   "topic": "血压评估",
+  "agent_tags": ["cardiometabolic_health"],
   "assessment_items": [
     {
       "name": "血压分层",
@@ -64,6 +65,15 @@ knowledge_base/
   }
 }
 ```
+
+其中 `agent_tags` 用于控制专科 agent 的检索范围。当前支持：
+
+- `sleep_activity_nicotine`
+- `diet_bmi`
+- `cardiometabolic_health`
+- `mental_social_health`
+
+专科 agent 会优先只检索带有自己标签的知识片段；全科 agent 仍会检索全部知识库内容。
 
 当前实现会自动把 JSON 展开成带路径的文本片段，例如：
 
@@ -123,7 +133,7 @@ pip install -e .
 python main.py --rebuild-kb
 ```
 
-如果一切正常，你会看到索引了多少个 `json` 文件、多少个知识片段。
+如果一切正常，你会看到索引了多少个 `json` 文件、多少个知识片段。修改 JSON 内容或 `agent_tags` 后，也需要重新执行一次索引重建。
 
 5. 查看知识库状态
 

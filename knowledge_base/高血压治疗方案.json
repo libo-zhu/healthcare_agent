@@ -1,5 +1,6 @@
 {
   "topic": "2020 国际高血压学会全球高血压实践指南 (治疗方案)",
+  "agent_tags": ["cardiometabolic_health", "diet_bmi", "sleep_activity_nicotine"],
   "children": [
     {
       "topic": "常规治疗",

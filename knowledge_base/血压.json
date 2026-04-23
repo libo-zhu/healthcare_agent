@@ -1,5 +1,6 @@
 {
   "topic": "血压",
+  "agent_tags": ["cardiometabolic_health"],
   "children": [
     {
       "topic": "诊室血压",

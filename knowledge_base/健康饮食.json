@@ -1,5 +1,6 @@
 {
   "topic": "健康饮食",
+  "agent_tags": ["diet_bmi"],
   "children": [
     {
       "topic": "2016中国居民膳食指南",

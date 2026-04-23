@@ -1,5 +1,6 @@
 {
   "topic": "血脂",
+  "agent_tags": ["cardiometabolic_health"],
   "children": [
     {
       "topic": "低危 (10年ASCVD风险 <5%)",

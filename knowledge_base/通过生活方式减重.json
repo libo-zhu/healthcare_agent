@@ -1,5 +1,6 @@
 {
     "topic" : "通过生活方式减重",
+    "agent_tags": ["diet_bmi", "sleep_activity_nicotine"],
     "children" :[
         {
             "topic": "医学营养治疗",

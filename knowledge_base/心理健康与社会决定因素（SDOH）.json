@@ -1,5 +1,6 @@
 {
   "topic": "心理健康与社会决定因素（SDOH）",
+  "agent_tags": ["mental_social_health"],
   "children": [
     {
       "topic": "抑郁快速筛查与分层",

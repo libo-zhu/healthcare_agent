@@ -1,5 +1,6 @@
 {
   "topic": "千步当量（总活动量）",
+  "agent_tags": ["sleep_activity_nicotine"],
   "children": [
     {
       "topic": "完成目标",

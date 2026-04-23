@@ -1,5 +1,6 @@
 {
   "topic": "常见慢性病身体活动指导",
+  "agent_tags": ["sleep_activity_nicotine", "diet_bmi", "cardiometabolic_health"],
   "children": [
     {
       "topic": "单纯性肥胖",

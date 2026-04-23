@@ -22,6 +22,13 @@ from healthcare_agent.config import (
     load_dotenv,
 )
 
+SPECIALIST_AGENT_NAMES = {
+    "sleep_activity_nicotine",
+    "diet_bmi",
+    "cardiometabolic_health",
+    "mental_social_health",
+}
+
 
 class RetrievedKnowledgeChunk(BaseModel):
     source_file: str
@@ -188,6 +195,7 @@ def build_knowledge_base_index(force_rebuild: bool = True) -> KnowledgeBaseBuild
         {
             "source_file": item["source_file"],
             "section_path": item["section_path"],
+            "agent_name": item["agent_name"],
         }
         for item in documents
     ]
@@ -256,11 +264,14 @@ def retrieve_knowledge(
         [search_query], normalize_embeddings=True
     ).tolist()[0]
     coarse_top_k = min(collection.count(), max(top_k or get_rag_coarse_top_k(), 1))
-    result = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=coarse_top_k,
-        include=["documents", "metadatas", "distances"],
-    )
+    query_params: dict[str, Any] = {
+        "query_embeddings": [query_embedding],
+        "n_results": coarse_top_k,
+        "include": ["documents", "metadatas", "distances"],
+    }
+    if agent_name:
+        query_params["where"] = {"agent_name": agent_name}
+    result = collection.query(**query_params)
 
     documents = result.get("documents", [[]])[0]
     metadatas = result.get("metadatas", [[]])[0]
@@ -356,19 +367,49 @@ def load_json_documents(base_dir: Path) -> list[dict[str, str]]:
     documents: list[dict[str, str]] = []
     for json_path in sorted(base_dir.rglob("*.json")):
         content = json.loads(json_path.read_text(encoding="utf-8"))
+        sanitized_content, agent_tags = extract_document_payload(content)
         relative_path = str(json_path.relative_to(base_dir))
-        sections = extract_sections_from_json(content)
-        for section_index, section in enumerate(sections):
-            for chunk_index, chunk in enumerate(split_text(section["content"])):
-                documents.append(
-                    {
-                        "id": f"{relative_path}::{section_index}::{chunk_index}",
-                        "source_file": relative_path,
-                        "section_path": section["section_path"],
-                        "content": chunk,
-                    }
-                )
+        sections = extract_sections_from_json(sanitized_content)
+        effective_tags = agent_tags or [""]
+        for agent_tag in effective_tags:
+            tag_suffix = agent_tag or "all_agents"
+            for section_index, section in enumerate(sections):
+                for chunk_index, chunk in enumerate(split_text(section["content"])):
+                    documents.append(
+                        {
+                            "id": f"{relative_path}::{tag_suffix}::{section_index}::{chunk_index}",
+                            "source_file": relative_path,
+                            "section_path": section["section_path"],
+                            "content": chunk,
+                            "agent_name": agent_tag,
+                        }
+                    )
     return documents
+
+
+def extract_document_payload(payload: Any) -> tuple[Any, list[str]]:
+    if not isinstance(payload, dict):
+        return payload, []
+
+    sanitized_payload = dict(payload)
+    raw_agent_tags = sanitized_payload.pop("agent_tags", [])
+    return sanitized_payload, normalize_agent_tags(raw_agent_tags)
+
+
+def normalize_agent_tags(raw_value: Any) -> list[str]:
+    if isinstance(raw_value, str):
+        candidates = [raw_value]
+    elif isinstance(raw_value, list):
+        candidates = [str(item) for item in raw_value]
+    else:
+        candidates = []
+
+    normalized: list[str] = []
+    for candidate in candidates:
+        tag = candidate.strip()
+        if tag in SPECIALIST_AGENT_NAMES and tag not in normalized:
+            normalized.append(tag)
+    return normalized
 
 
 def extract_sections_from_json(payload: Any, path: str = "root") -> list[dict[str, str]]:

@@ -1,5 +1,6 @@
 {
   "topic": "血脂治疗",
+  "agent_tags": ["cardiometabolic_health", "diet_bmi"],
   "children": [
     {
       "topic": "治疗目标",

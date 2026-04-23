@@ -1,5 +1,6 @@
 {
     "topic" : "单纯生活方式难以减重",
+    "agent_tags": ["diet_bmi", "mental_social_health"],
     "chileren" : [
         {
             "topic": "药物治疗",
