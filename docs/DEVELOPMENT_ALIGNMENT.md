@@ -282,6 +282,37 @@ Content-Type: application/json
 }
 ```
 
+更推荐前端使用会话内流式评估：
+
+```http
+POST /api/v1/conversations/{conversation_id}/messages/stream
+Content-Type: application/json
+Accept: text/event-stream
+```
+
+请求体同上。该接口会返回原有 agent 流式事件，并额外返回：
+
+- `user_message`: 用户消息已经保存。
+- `persisted`: AI 最终回答和 metadata 已保存，前端可用其中的 `assistant_message` 替换本地临时消息。
+
+会话内病例文件上传流式评估：
+
+```http
+POST /api/v1/conversations/{conversation_id}/messages/files/stream
+Content-Type: multipart/form-data
+Accept: text/event-stream
+```
+
+表单字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `medical_data` | Text | 否 | 用户问题或补充说明 |
+| `mode` | Text | 否 | `specialist` 或 `general`，不传则使用会话当前模式 |
+| `files` | File[] | 否 | 病例 PDF 或图片，也兼容后端已支持的 txt/csv |
+
+必须至少提供 `medical_data` 或 `files` 之一。文件会先经过 `build_preprocessed_input`，然后再和会话历史一起送入 agent。
+
 响应会返回本轮保存后的用户消息和助手消息：
 
 ```json

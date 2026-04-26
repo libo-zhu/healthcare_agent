@@ -19,10 +19,6 @@
           <button type="button" :class="{ active: authMode === 'register' }" @click="authMode = 'register'">注册</button>
         </div>
 
-        <label v-if="authMode === 'register'">
-          显示名称
-          <input v-model.trim="authForm.displayName" placeholder="例如：张同学" />
-        </label>
         <label>
           用户名
           <input v-model.trim="authForm.username" required autocomplete="username" placeholder="请输入用户名" />
@@ -108,29 +104,48 @@
           <div class="message-avatar">{{ message.role === 'user' ? '我' : '评' }}</div>
           <div class="message-body">
             <div class="message-role">{{ message.role === 'user' ? '我的健康信息' : '健康评估建议' }}</div>
-            <p>{{ message.content }}</p>
+            <p v-if="message.role === 'user'">{{ message.content }}</p>
+            <div v-else class="markdown-body" v-html="renderMarkdown(message.content)"></div>
           </div>
         </article>
 
-        <article v-if="loading && pendingText" class="message assistant pending">
+        <article v-if="loading && pendingText && streamStatus" class="message assistant pending">
           <div class="message-avatar">评</div>
           <div class="message-body">
             <div class="message-role">健康评估建议</div>
-            <p>正在结合对话上下文和知识库进行评估...</p>
+            <p>{{ streamStatus || '正在结合对话上下文和知识库进行评估...' }}</p>
           </div>
         </article>
       </div>
 
       <form class="composer" @submit.prevent="send">
-        <textarea
-          v-model="draft"
-          :disabled="loading || !activeConversation"
-          rows="3"
-          placeholder="输入健康信息，例如：男，45岁，血压148/95，最近睡眠差、运动少，想知道优先处理什么。"
-          @keydown.meta.enter.prevent="send"
-          @keydown.ctrl.enter.prevent="send"
-        />
-        <button class="primary-button" :disabled="loading || !draft.trim() || !activeConversation" type="submit">
+        <div class="composer-main">
+          <textarea
+            v-model="draft"
+            :disabled="loading || !activeConversation"
+            rows="3"
+            placeholder="输入健康问题，也可以上传病例图片或 PDF，例如：请结合这份体检报告评估血压和血糖风险。"
+            @keydown.meta.enter.prevent="send"
+            @keydown.ctrl.enter.prevent="send"
+          />
+          <div class="attachment-row">
+            <label class="file-button">
+              上传病例
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.bmp,.tif,.tiff,.webp"
+                :disabled="loading || !activeConversation"
+                @change="handleFiles"
+              />
+            </label>
+            <span v-if="selectedFiles.length" class="file-summary">
+              {{ selectedFiles.map((file) => file.name).join('、') }}
+            </span>
+            <button v-if="selectedFiles.length" class="clear-files-button" type="button" @click="clearFiles">清空</button>
+          </div>
+        </div>
+        <button class="primary-button" :disabled="loading || (!draft.trim() && !selectedFiles.length) || !activeConversation" type="submit">
           {{ loading ? '评估中...' : '发送评估' }}
         </button>
       </form>
@@ -178,16 +193,18 @@ import { api, clearToken, getToken, setToken } from './api'
 
 const user = ref(null)
 const authMode = ref('login')
-const authForm = reactive({ username: '', password: '', displayName: '' })
+const authForm = reactive({ username: '', password: '' })
 const conversations = ref([])
 const activeConversation = ref(null)
 const editableTitle = ref('')
 const messages = ref([])
 const draft = ref('')
+const selectedFiles = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
 const messagesEl = ref(null)
 const pendingText = ref('')
+const streamStatus = ref('')
 
 const starters = [
   '男，45岁，血压148/95，最近睡眠差、运动少，想知道优先处理什么。',
@@ -226,8 +243,7 @@ async function submitAuth() {
       ? await api.login({ username: authForm.username, password: authForm.password })
       : await api.register({
           username: authForm.username,
-          password: authForm.password,
-          display_name: authForm.displayName || authForm.username
+          password: authForm.password
         })
     setToken(payload.access_token)
     user.value = payload.user
@@ -293,39 +309,167 @@ async function saveTitle() {
 }
 
 async function send() {
-  if (!draft.value.trim() || !activeConversation.value || loading.value) return
+  if ((!draft.value.trim() && !selectedFiles.value.length) || !activeConversation.value || loading.value) return
   const content = draft.value.trim()
+  const files = [...selectedFiles.value]
   draft.value = ''
-  pendingText.value = content
+  selectedFiles.value = []
+  pendingText.value = content || files.map((file) => file.name).join('、')
   loading.value = true
+  streamStatus.value = '正在读取输入...'
   errorMessage.value = ''
-  messages.value.push({ id: `local-${Date.now()}`, role: 'user', content, metadata: null })
+  const localAssistantId = `assistant-${Date.now()}`
+  messages.value.push({
+    id: `local-${Date.now()}`,
+    role: 'user',
+    content: buildVisibleUserContent(content, files),
+    metadata: null
+  })
+  messages.value.push({
+    id: localAssistantId,
+    role: 'assistant',
+    content: '',
+    metadata: null
+  })
   await scrollToBottom()
   try {
-    const result = await api.sendMessage(activeConversation.value.id, {
-      content,
-      mode: activeMode.value
-    })
-    activeConversation.value = result.conversation
-    editableTitle.value = result.conversation.title
-    const localIndex = messages.value.findIndex((item) => String(item.id).startsWith('local-'))
-    if (localIndex >= 0) {
-      messages.value.splice(localIndex, 1, result.user_message)
+    const onEvent = async (event) => {
+      if (event.type === 'rewrite') {
+        streamStatus.value = '正在整理健康信息...'
+      } else if (event.type === 'route') {
+        streamStatus.value = '正在匹配评估方向...'
+      } else if (event.type === 'knowledge') {
+        streamStatus.value = '正在检索医学知识库依据...'
+      } else if (event.type === 'source') {
+        streamStatus.value = '病例资料已解析，正在评估...'
+      } else if (event.type === 'token') {
+        const assistant = messages.value.find((item) => item.id === localAssistantId)
+        if (assistant) assistant.content += event.content || ''
+        streamStatus.value = ''
+      } else if (event.type === 'user_message') {
+        const localIndex = messages.value.findIndex((item) => String(item.id).startsWith('local-'))
+        if (localIndex >= 0) {
+          messages.value.splice(localIndex, 1, {
+            id: event.id,
+            role: 'user',
+            content: event.content,
+            metadata: null
+          })
+        }
+      } else if (event.type === 'persisted') {
+        activeConversation.value = event.conversation
+        editableTitle.value = event.conversation.title
+        const assistantIndex = messages.value.findIndex((item) => item.id === localAssistantId)
+        if (assistantIndex >= 0) {
+          messages.value.splice(assistantIndex, 1, event.assistant_message)
+        }
+      } else if (event.type === 'error') {
+        throw new Error(event.content || '评估失败')
+      }
+      await scrollToBottom()
     }
-    messages.value.push(result.assistant_message)
+
+    if (files.length) {
+      const formData = new FormData()
+      formData.append('medical_data', content)
+      formData.append('mode', activeMode.value)
+      for (const file of files) {
+        formData.append('files', file)
+      }
+      await api.streamFiles(activeConversation.value.id, formData, onEvent)
+    } else {
+      await api.streamMessage(activeConversation.value.id, {
+        content,
+        mode: activeMode.value
+      }, onEvent)
+    }
     await loadConversations()
   } catch (error) {
-    messages.value.push({
-      id: `error-${Date.now()}`,
-      role: 'assistant',
-      content: `评估失败：${error.message}`,
-      metadata: null
-    })
+    const assistant = messages.value.find((item) => item.id === localAssistantId)
+    if (assistant) {
+      assistant.content = `评估失败：${error.message}`
+    }
   } finally {
     pendingText.value = ''
+    streamStatus.value = ''
     loading.value = false
     await scrollToBottom()
   }
+}
+
+function handleFiles(event) {
+  selectedFiles.value = Array.from(event.target.files || [])
+  event.target.value = ''
+}
+
+function clearFiles() {
+  selectedFiles.value = []
+}
+
+function buildVisibleUserContent(content, files) {
+  const parts = []
+  if (content) parts.push(content)
+  if (files.length) parts.push(`上传资料：${files.map((file) => file.name).join('、')}`)
+  return parts.join('\n')
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function renderInlineMarkdown(value) {
+  return value
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+?)`/g, '<code>$1</code>')
+}
+
+function renderMarkdown(value) {
+  const escaped = escapeHtml(value || '')
+  const lines = escaped.split('\n')
+  const html = []
+  let inList = false
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) {
+      if (inList) {
+        html.push('</ul>')
+        inList = false
+      }
+      continue
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/)
+    if (heading) {
+      if (inList) {
+        html.push('</ul>')
+        inList = false
+      }
+      html.push(`<h${heading[1].length}>${renderInlineMarkdown(heading[2])}</h${heading[1].length}>`)
+      continue
+    }
+    const bullet = line.match(/^[-*]\s+(.+)$/)
+    if (bullet) {
+      if (!inList) {
+        html.push('<ul>')
+        inList = true
+      }
+      html.push(`<li>${renderInlineMarkdown(bullet[1])}</li>`)
+      continue
+    }
+    if (inList) {
+      html.push('</ul>')
+      inList = false
+    }
+    html.push(`<p>${renderInlineMarkdown(line)}</p>`)
+  }
+
+  if (inList) html.push('</ul>')
+  return html.join('')
 }
 
 function logout() {

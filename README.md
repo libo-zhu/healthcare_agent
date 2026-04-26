@@ -16,7 +16,7 @@
 - 基于本地 JSON 知识库的 RAG：Chroma 粗召回 + CrossEncoder reranker 重排。
 - 支持普通 JSON 接口和 SSE 流式接口。
 - 支持注册、登录、新建会话、对话历史持久化和轻量上下文记忆。
-- 提供 Vue 健康评估工作台，包含会话列表、模式切换、知识依据侧栏。
+- 提供 Vue 健康评估工作台，包含会话列表、模式切换、病例文件上传、流式回答和知识依据侧栏。
 - 支持上传 `.txt`、`.csv`、`.pdf` 和常见图片格式；图片 OCR 依赖本机 `tesseract`。
 - 提供自动评测与 LLM-as-a-judge 辅助评分脚本。
 
@@ -165,6 +165,8 @@ http://localhost:5173/
 - `PATCH /api/v1/conversations/{conversation_id}`
 - `DELETE /api/v1/conversations/{conversation_id}`
 - `POST /api/v1/conversations/{conversation_id}/messages`
+- `POST /api/v1/conversations/{conversation_id}/messages/stream`
+- `POST /api/v1/conversations/{conversation_id}/messages/files/stream`
 
 请求示例：
 

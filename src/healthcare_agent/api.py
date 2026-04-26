@@ -10,9 +10,11 @@ from fastapi.responses import StreamingResponse
 
 from healthcare_agent.auth import create_access_token, get_current_user, hash_password, verify_password
 from healthcare_agent.chat_service import (
+    build_contextual_medical_data,
     create_conversation,
     delete_conversation,
     get_conversation,
+    insert_message,
     list_conversations,
     list_messages,
     run_chat_turn,
@@ -163,6 +165,130 @@ def normalize_message(row: dict) -> dict:
     return normalized
 
 
+def build_stream_metadata(
+    *,
+    mode: str,
+    final_event: dict | None,
+    route_event: dict | None,
+    knowledge_chunks: list[dict],
+    coarse_knowledge_chunks: list[dict],
+    reranked_knowledge_chunks: list[dict],
+    source_event: dict | None = None,
+) -> dict:
+    final_event = final_event or {}
+    route_event = route_event or {}
+    return {
+        "mode": mode,
+        "agent_name": final_event.get("agent_name") or route_event.get("agent_name"),
+        "agent_label": final_event.get("agent_label") or route_event.get("agent_label"),
+        "routed_agent_names": final_event.get("routed_agent_names") or route_event.get("agent_names", []),
+        "route_reason": route_event.get("reason", ""),
+        "rewritten_query": final_event.get("rewritten_query"),
+        "input_tokens": final_event.get("input_tokens", 0),
+        "output_tokens": final_event.get("output_tokens", 0),
+        "total_tokens": final_event.get("total_tokens", 0),
+        "reasoning_time_seconds": final_event.get("reasoning_time_seconds", 0),
+        "knowledge_chunks": final_event.get("knowledge_chunks") or knowledge_chunks,
+        "coarse_knowledge_chunks": final_event.get("coarse_knowledge_chunks") or coarse_knowledge_chunks,
+        "reranked_knowledge_chunks": final_event.get("reranked_knowledge_chunks") or reranked_knowledge_chunks,
+        "source_summary": source_event.get("source_summary") if source_event else None,
+        "preprocessed_text": source_event.get("preprocessed_text") if source_event else None,
+        "preprocessing_notes": source_event.get("preprocessing_notes", []) if source_event else [],
+    }
+
+
+async def persistent_chat_sse_event_generator(
+    *,
+    user_id: int,
+    conversation_id: int,
+    user_content: str,
+    agent_input: str,
+    mode: str,
+    source_event: dict | None = None,
+) -> AsyncIterator[str]:
+    conversation = get_conversation(user_id, conversation_id)
+    if mode != conversation["mode"]:
+        conversation = update_conversation(user_id, conversation_id, mode=mode)  # type: ignore[arg-type]
+
+    history = list_messages(user_id, conversation_id)
+    contextual_input = build_contextual_medical_data(history, agent_input)
+    user_message_id = insert_message(
+        conversation_id,
+        "user",
+        user_content,
+        metadata={
+            "mode": mode,
+            "source_summary": source_event.get("source_summary") if source_event else "inline_text",
+            "preprocessed_text": source_event.get("preprocessed_text") if source_event else agent_input,
+            "preprocessing_notes": source_event.get("preprocessing_notes", []) if source_event else [],
+        },
+    )
+
+    if len(history) == 0 and conversation["title"] == "新的健康评估":
+        update_conversation(user_id, conversation_id, title=user_content[:32])
+
+    yield f"data: {json.dumps({'type': 'user_message', 'id': user_message_id, 'role': 'user', 'content': user_content}, ensure_ascii=False)}\n\n"
+    if source_event:
+        yield f"data: {json.dumps(source_event, ensure_ascii=False)}\n\n"
+
+    stream_handler = stream_general_health_assessment if mode == "general" else stream_healthcare_assessment
+    route_event: dict | None = None
+    final_event: dict | None = None
+    token_parts: list[str] = []
+    knowledge_chunks: list[dict] = []
+    coarse_knowledge_chunks: list[dict] = []
+    reranked_knowledge_chunks: list[dict] = []
+
+    try:
+        async for event in stream_handler(contextual_input):
+            event_type = event.get("type")
+            if event_type == "route":
+                route_event = event
+            elif event_type == "knowledge":
+                knowledge_chunks.extend(event.get("chunks", []))
+                coarse_knowledge_chunks.extend(event.get("coarse_chunks", []))
+                reranked_knowledge_chunks.extend(event.get("reranked_chunks", []))
+            elif event_type == "token":
+                token_parts.append(str(event.get("content", "")))
+            elif event_type == "done":
+                final_event = event
+                if event.get("content"):
+                    token_parts = [str(event["content"])]
+
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+        content = "".join(token_parts)
+        metadata = build_stream_metadata(
+            mode=mode,
+            final_event=final_event,
+            route_event=route_event,
+            knowledge_chunks=knowledge_chunks,
+            coarse_knowledge_chunks=coarse_knowledge_chunks,
+            reranked_knowledge_chunks=reranked_knowledge_chunks,
+            source_event=source_event,
+        )
+        assistant_message_id = insert_message(
+            conversation_id,
+            "assistant",
+            content,
+            metadata=metadata,
+        )
+        persisted_event = {
+            "type": "persisted",
+            "conversation": normalize_conversation(get_conversation(user_id, conversation_id)),
+            "assistant_message": {
+                "id": assistant_message_id,
+                "role": "assistant",
+                "content": content,
+                "metadata": metadata,
+            },
+        }
+        yield f"data: {json.dumps(persisted_event, ensure_ascii=False)}\n\n"
+    except Exception as exc:
+        payload = {"type": "error", "content": str(exc)}
+        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 @app.post("/api/v1/auth/register", response_model=AuthResponse)
 def register_user(request: UserCreateRequest) -> AuthResponse:
     username = request.username.strip()
@@ -285,6 +411,70 @@ async def create_conversation_message(
         "user_message": normalize_message(result["user_message"]),
         "assistant_message": normalize_message(result["assistant_message"]),
     }
+
+
+@app.post("/api/v1/conversations/{conversation_id}/messages/stream")
+async def create_streaming_conversation_message(
+    conversation_id: int,
+    request: ChatTurnRequest,
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    conversation = get_conversation(current_user["id"], conversation_id)
+    mode = request.mode or conversation["mode"]
+    return build_streaming_response(
+        persistent_chat_sse_event_generator(
+            user_id=current_user["id"],
+            conversation_id=conversation_id,
+            user_content=request.content,
+            agent_input=request.content,
+            mode=mode,
+        )
+    )
+
+
+@app.post("/api/v1/conversations/{conversation_id}/messages/files/stream")
+async def create_streaming_conversation_message_from_files(
+    conversation_id: int,
+    medical_data: str | None = Form(default=None),
+    mode: str | None = Form(default=None),
+    files: list[UploadFile] = File(default=[]),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    try:
+        conversation = get_conversation(current_user["id"], conversation_id)
+        active_mode = mode or conversation["mode"]
+        preprocessed = await build_preprocessed_input(medical_data=medical_data, files=files)
+    except HTTPException as exc:
+        payload = {"type": "error", "content": exc.detail}
+        return StreamingResponse(
+            iter([f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"]),
+            media_type="text/event-stream",
+        )
+
+    uploaded_names = [upload.filename or "unknown" for upload in files]
+    user_content_parts = []
+    if medical_data and medical_data.strip():
+        user_content_parts.append(medical_data.strip())
+    if uploaded_names:
+        user_content_parts.append("上传资料：" + "、".join(uploaded_names))
+    user_content = "\n".join(user_content_parts) or "上传病例资料"
+    source_event = {
+        "type": "source",
+        "source_summary": preprocessed.source_summary,
+        "preprocessed_text": preprocessed.medical_data,
+        "preprocessing_notes": preprocessed.notes,
+    }
+
+    return build_streaming_response(
+        persistent_chat_sse_event_generator(
+            user_id=current_user["id"],
+            conversation_id=conversation_id,
+            user_content=user_content,
+            agent_input=preprocessed.medical_data,
+            mode=active_mode,
+            source_event=source_event,
+        )
+    )
 
 
 @app.post("/api/v1/specialist/assessment", response_model=AssessmentResponse)

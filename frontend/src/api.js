@@ -12,15 +12,21 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+function authHeaders(extra = {}) {
+  const headers = { ...extra }
+  const token = getToken()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return headers
+}
+
 async function request(path, options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   }
-  const token = getToken()
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  Object.assign(headers, authHeaders())
 
   const response = await fetch(path, {
     ...options,
@@ -78,5 +84,54 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data)
     })
+  },
+  async streamMessage(id, data, onEvent) {
+    return streamRequest(`/api/v1/conversations/${id}/messages/stream`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(data)
+    }, onEvent)
+  },
+  async streamFiles(id, formData, onEvent) {
+    return streamRequest(`/api/v1/conversations/${id}/messages/files/stream`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData
+    }, onEvent)
+  }
+}
+
+async function streamRequest(path, options, onEvent) {
+  const response = await fetch(path, options)
+  if (!response.ok) {
+    const text = await response.text()
+    let detail = '请求失败，请稍后重试'
+    try {
+      detail = JSON.parse(text)?.detail || detail
+    } catch {
+      detail = text || detail
+    }
+    throw new Error(detail)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() || ''
+    for (const part of parts) {
+      const line = part.split('\n').find((item) => item.startsWith('data: '))
+      if (!line) continue
+      onEvent(JSON.parse(line.slice(6)))
+    }
+  }
+
+  if (buffer.trim().startsWith('data: ')) {
+    onEvent(JSON.parse(buffer.trim().slice(6)))
   }
 }
