@@ -1,0 +1,9 @@
+{
+  "dataset": "/Users/zhulibo/data/university/graduation project/healthcare_agent/test_data.json",
+  "mode": "specialist",
+  "runner": "direct",
+  "api_base_url": "http://127.0.0.1:8000",
+  "concurrency": 1,
+  "limit": 0,
+  "output_dir": "/Users/zhulibo/data/university/graduation project/healthcare_agent/eval_results/20260423_221848_specialist_direct"
+}

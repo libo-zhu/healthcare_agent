@@ -1,0 +1,19 @@
+{
+  "total_cases": 80,
+  "judged_cases": 80,
+  "failed_cases": 0,
+  "judge_model": "deepseek-chat",
+  "judge_base_url": "https://api.deepseek.com",
+  "average_scores": {
+    "correctness": 4.775,
+    "coverage": 5,
+    "groundedness": 4.7125,
+    "safety": 5
+  },
+  "hallucination": {
+    "yes_count": 5,
+    "no_count": 75,
+    "yes_rate": 0.0625
+  },
+  "failed_case_ids": []
+}

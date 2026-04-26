@@ -98,3 +98,70 @@ class KnowledgeBaseRebuildResponse(BaseModel):
     embedding_model: str
     index_exists: bool
     indexed_chunks: int = 0
+
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64)
+    password: str = Field(..., min_length=6, max_length=128)
+    display_name: str | None = Field(default=None, max_length=100)
+
+
+class UserLoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class UserProfile(BaseModel):
+    id: int
+    username: str
+    display_name: str
+    created_at: str | None = None
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserProfile
+
+
+class ConversationCreateRequest(BaseModel):
+    title: str = Field(default="新的健康评估", max_length=180)
+    mode: str = Field(default="specialist", pattern="^(specialist|general)$")
+
+
+class ConversationUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=180)
+    mode: str | None = Field(default=None, pattern="^(specialist|general)$")
+
+
+class ConversationSummary(BaseModel):
+    id: int
+    title: str
+    mode: str
+    created_at: str | None = None
+    updated_at: str | None = None
+    last_message: str | None = None
+
+
+class StoredMessage(BaseModel):
+    id: int
+    role: str
+    content: str
+    metadata: dict | list | str | int | float | bool | None = None
+    created_at: str | None = None
+
+
+class ConversationDetail(BaseModel):
+    conversation: ConversationSummary
+    messages: list[StoredMessage] = Field(default_factory=list)
+
+
+class ChatTurnRequest(BaseModel):
+    content: str = Field(..., min_length=1)
+    mode: str | None = Field(default=None, pattern="^(specialist|general)$")
+
+
+class ChatTurnResponse(BaseModel):
+    conversation: ConversationSummary
+    user_message: StoredMessage
+    assistant_message: StoredMessage

@@ -3,10 +3,22 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import pymysql
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from healthcare_agent.auth import create_access_token, get_current_user, hash_password, verify_password
+from healthcare_agent.chat_service import (
+    create_conversation,
+    delete_conversation,
+    get_conversation,
+    list_conversations,
+    list_messages,
+    run_chat_turn,
+    update_conversation,
+)
+from healthcare_agent.database import ensure_database_schema, get_connection
 from healthcare_agent.agent import (
     arun_general_health_assessment,
     arun_healthcare_assessment,
@@ -18,9 +30,19 @@ from healthcare_agent.agent import (
 from healthcare_agent.knowledge_base import build_knowledge_base_index, get_knowledge_base_status
 from healthcare_agent.schemas import AssessmentRequest, AssessmentResponse
 from healthcare_agent.schemas import (
+    AuthResponse,
+    ChatTurnRequest,
+    ChatTurnResponse,
+    ConversationCreateRequest,
+    ConversationDetail,
+    ConversationSummary,
+    ConversationUpdateRequest,
     KnowledgeBaseRebuildRequest,
     KnowledgeBaseRebuildResponse,
     KnowledgeBaseStatusResponse,
+    UserCreateRequest,
+    UserLoginRequest,
+    UserProfile,
 )
 from healthcare_agent.preprocessing import build_preprocessed_input
 
@@ -38,6 +60,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def startup() -> None:
+    ensure_database_schema()
 
 
 @app.get("/")
@@ -107,6 +134,157 @@ def build_streaming_response(event_generator: AsyncIterator[str]) -> StreamingRe
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def to_user_profile(row: dict) -> UserProfile:
+    return UserProfile(
+        id=row["id"],
+        username=row["username"],
+        display_name=row["display_name"],
+        created_at=str(row.get("created_at")) if row.get("created_at") is not None else None,
+    )
+
+
+def normalize_conversation(row: dict) -> dict:
+    normalized = dict(row)
+    if normalized.get("created_at") is not None:
+        normalized["created_at"] = str(normalized["created_at"])
+    if normalized.get("updated_at") is not None:
+        normalized["updated_at"] = str(normalized["updated_at"])
+    return normalized
+
+
+def normalize_message(row: dict) -> dict:
+    normalized = dict(row)
+    if normalized.get("created_at") is not None:
+        normalized["created_at"] = str(normalized["created_at"])
+    if "metadata" not in normalized:
+        normalized["metadata"] = None
+    return normalized
+
+
+@app.post("/api/v1/auth/register", response_model=AuthResponse)
+def register_user(request: UserCreateRequest) -> AuthResponse:
+    username = request.username.strip()
+    display_name = (request.display_name or username).strip() or username
+    try:
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO users (username, password_hash, display_name)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (username, hash_password(request.password), display_name),
+                )
+                user_id = cursor.lastrowid
+                cursor.execute(
+                    "SELECT id, username, display_name, created_at FROM users WHERE id=%s",
+                    (user_id,),
+                )
+                user = cursor.fetchone()
+    except pymysql.err.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Username already exists.") from exc
+
+    return AuthResponse(
+        access_token=create_access_token(user["id"], user["username"]),
+        user=to_user_profile(user),
+    )
+
+
+@app.post("/api/v1/auth/login", response_model=AuthResponse)
+def login_user(request: UserLoginRequest) -> AuthResponse:
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, username, password_hash, display_name, created_at FROM users WHERE username=%s",
+                (request.username.strip(),),
+            )
+            user = cursor.fetchone()
+
+    if not user or not verify_password(request.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+    return AuthResponse(
+        access_token=create_access_token(user["id"], user["username"]),
+        user=to_user_profile(user),
+    )
+
+
+@app.get("/api/v1/auth/me", response_model=UserProfile)
+def read_current_user(current_user: dict = Depends(get_current_user)) -> UserProfile:
+    return to_user_profile(current_user)
+
+
+@app.get("/api/v1/conversations", response_model=list[ConversationSummary])
+def read_conversations(current_user: dict = Depends(get_current_user)) -> list[dict]:
+    return [normalize_conversation(row) for row in list_conversations(current_user["id"])]
+
+
+@app.post("/api/v1/conversations", response_model=ConversationSummary)
+def create_user_conversation(
+    request: ConversationCreateRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    conversation = create_conversation(
+        current_user["id"],
+        request.title,
+        request.mode,  # type: ignore[arg-type]
+    )
+    return normalize_conversation(conversation)
+
+
+@app.get("/api/v1/conversations/{conversation_id}", response_model=ConversationDetail)
+def read_conversation_detail(
+    conversation_id: int,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    conversation = normalize_conversation(get_conversation(current_user["id"], conversation_id))
+    messages = [normalize_message(row) for row in list_messages(current_user["id"], conversation_id)]
+    return {"conversation": conversation, "messages": messages}
+
+
+@app.patch("/api/v1/conversations/{conversation_id}", response_model=ConversationSummary)
+def update_user_conversation(
+    conversation_id: int,
+    request: ConversationUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    conversation = update_conversation(
+        current_user["id"],
+        conversation_id,
+        title=request.title,
+        mode=request.mode,  # type: ignore[arg-type]
+    )
+    return normalize_conversation(conversation)
+
+
+@app.delete("/api/v1/conversations/{conversation_id}")
+def delete_user_conversation(
+    conversation_id: int,
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, bool]:
+    delete_conversation(current_user["id"], conversation_id)
+    return {"deleted": True}
+
+
+@app.post("/api/v1/conversations/{conversation_id}/messages", response_model=ChatTurnResponse)
+async def create_conversation_message(
+    conversation_id: int,
+    request: ChatTurnRequest,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    result = await run_chat_turn(
+        current_user["id"],
+        conversation_id,
+        request.content,
+        mode=request.mode,  # type: ignore[arg-type]
+    )
+    return {
+        "conversation": normalize_conversation(result["conversation"]),
+        "user_message": normalize_message(result["user_message"]),
+        "assistant_message": normalize_message(result["assistant_message"]),
+    }
 
 
 @app.post("/api/v1/specialist/assessment", response_model=AssessmentResponse)

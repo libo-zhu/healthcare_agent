@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-from functools import lru_cache
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -28,6 +28,13 @@ SPECIALIST_AGENT_NAMES = {
     "cardiometabolic_health",
     "mental_social_health",
 }
+
+_embedding_model = None
+_reranker_model = None
+_chroma_client = None
+_embedding_model_lock = Lock()
+_reranker_model_lock = Lock()
+_chroma_client_lock = Lock()
 
 
 class RetrievedKnowledgeChunk(BaseModel):
@@ -123,36 +130,77 @@ def ensure_supported_dependencies() -> None:
         ) from exc
 
 
-@lru_cache(maxsize=1)
 def get_embedding_model():
-    ensure_supported_dependencies()
-    from sentence_transformers import SentenceTransformer
+    global _embedding_model
+    if _embedding_model is not None:
+        return _embedding_model
 
-    return SentenceTransformer(get_embedding_model_name())
+    with _embedding_model_lock:
+        if _embedding_model is not None:
+            return _embedding_model
+
+        ensure_supported_dependencies()
+        from sentence_transformers import SentenceTransformer
+
+        _embedding_model = SentenceTransformer(get_embedding_model_name())
+        return _embedding_model
 
 
-@lru_cache(maxsize=1)
 def get_reranker_model():
-    ensure_supported_dependencies()
-    from sentence_transformers import CrossEncoder
+    global _reranker_model
+    if _reranker_model is not None:
+        return _reranker_model
 
-    return CrossEncoder(get_reranker_model_name())
+    with _reranker_model_lock:
+        if _reranker_model is not None:
+            return _reranker_model
+
+        ensure_supported_dependencies()
+        from sentence_transformers import CrossEncoder
+
+        _reranker_model = CrossEncoder(get_reranker_model_name())
+        return _reranker_model
 
 
-@lru_cache(maxsize=1)
 def get_chroma_client():
-    ensure_supported_dependencies()
-    import chromadb
+    global _chroma_client
+    if _chroma_client is not None:
+        return _chroma_client
 
-    persist_dir = get_chroma_persist_dir()
-    persist_dir.mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(persist_dir))
+    with _chroma_client_lock:
+        if _chroma_client is not None:
+            return _chroma_client
+
+        ensure_supported_dependencies()
+        import chromadb
+
+        persist_dir = get_chroma_persist_dir()
+        persist_dir.mkdir(parents=True, exist_ok=True)
+        _chroma_client = chromadb.PersistentClient(path=str(persist_dir))
+        return _chroma_client
 
 
 def clear_rag_caches() -> None:
-    get_embedding_model.cache_clear()
-    get_reranker_model.cache_clear()
-    get_chroma_client.cache_clear()
+    global _embedding_model, _reranker_model, _chroma_client
+
+    with _embedding_model_lock:
+        _embedding_model = None
+
+    with _reranker_model_lock:
+        _reranker_model = None
+
+    with _chroma_client_lock:
+        _chroma_client = None
+
+
+def warmup_rag_dependencies() -> None:
+    if not is_rag_enabled():
+        return
+
+    get_chroma_client()
+    ensure_supported_dependencies()
+    get_embedding_model()
+    get_reranker_model()
 
 
 def get_collection():
