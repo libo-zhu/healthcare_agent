@@ -11,6 +11,7 @@ from healthcare_agent.database import get_connection
 
 ConversationMode = Literal["specialist", "general"]
 MAX_CONTEXT_MESSAGES = 10
+MAX_CONTEXT_CHARS_PER_MESSAGE = 2400
 
 
 def serialize_metadata(payload: Any) -> str:
@@ -164,15 +165,39 @@ def insert_message(
             return int(cursor.lastrowid)
 
 
+def truncate_context_text(value: str, max_chars: int = MAX_CONTEXT_CHARS_PER_MESSAGE) -> str:
+    text = value.strip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "\n...[历史内容过长，已截断]"
+
+
+def format_message_for_context(message: dict[str, Any]) -> str:
+    role_label = "用户" if message["role"] == "user" else "健康评估助手"
+    content = truncate_context_text(str(message.get("content", "")))
+    metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
+    preprocessed_text = ""
+    if message["role"] == "user":
+        preprocessed_text = str(metadata.get("preprocessed_text") or "").strip()
+
+    if preprocessed_text and preprocessed_text != message.get("content"):
+        parsed_text = truncate_context_text(preprocessed_text)
+        return "\n".join(
+            [
+                f"{role_label}: {content}",
+                "用户上传/输入资料解析结果:",
+                parsed_text,
+            ]
+        )
+    return f"{role_label}: {content}"
+
+
 def build_contextual_medical_data(history: list[dict[str, Any]], user_message: str) -> str:
     recent_history = history[-MAX_CONTEXT_MESSAGES:]
     if not recent_history:
         return user_message
 
-    formatted_messages = []
-    for message in recent_history:
-        role_label = "用户" if message["role"] == "user" else "健康评估助手"
-        formatted_messages.append(f"{role_label}: {message['content']}")
+    formatted_messages = [format_message_for_context(message) for message in recent_history]
 
     return "\n".join(
         [

@@ -1,0 +1,42 @@
+{
+  "dataset_path": "/Users/zhulibo/data/university/graduation project/healthcare_agent/test_data.json",
+  "mode": "specialist",
+  "runner": "deepseek",
+  "total_cases": 80,
+  "ok_cases": 79,
+  "error_cases": 1,
+  "success_rate": 0.9875,
+  "timing": {
+    "mean_elapsed_seconds": 27.5575,
+    "mean_reasoning_time_seconds": 0.0
+  },
+  "tokens": {
+    "mean_input_tokens": 123.1646,
+    "mean_output_tokens": 897.2025,
+    "mean_total_tokens": 1020.3671,
+    "sum_total_tokens": 80609
+  },
+  "routing_metrics": {
+    "evaluated_cases": 0,
+    "macro_precision": 0.0,
+    "macro_recall": 0.0,
+    "macro_f1": 0.0,
+    "exact_match_rate": 0.0,
+    "mean_jaccard": 0.0
+  },
+  "rag_file_level_metrics": {
+    "evaluated_cases": 0,
+    "macro_precision": 0.0,
+    "macro_recall": 0.0,
+    "macro_f1": 0.0,
+    "exact_match_rate": 0.0
+  },
+  "safety_metrics": {
+    "high_risk_cases": 30,
+    "urgency_signal_rate_in_high_risk_cases": 1.0,
+    "delay_signal_rate_in_high_risk_cases": 0.0
+  },
+  "error_case_ids": [
+    "case_019"
+  ]
+}

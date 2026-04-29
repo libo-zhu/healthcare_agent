@@ -52,17 +52,27 @@
       <button class="new-chat-button" @click="createNewConversation">新建健康评估</button>
 
       <div class="conversation-list">
-        <button
+        <div
           v-for="conversation in conversations"
           :key="conversation.id"
           class="conversation-item"
           :class="{ active: activeConversation?.id === conversation.id }"
           @click="selectConversation(conversation.id)"
         >
-          <span class="conversation-title">{{ conversation.title }}</span>
-          <span class="conversation-meta">{{ modeLabel(conversation.mode) }}</span>
-          <span v-if="conversation.last_message" class="conversation-preview">{{ conversation.last_message }}</span>
-        </button>
+          <button class="conversation-main" type="button">
+            <span class="conversation-title">{{ conversation.title }}</span>
+            <span class="conversation-meta">{{ modeLabel(conversation.mode) }}</span>
+            <span v-if="conversation.last_message" class="conversation-preview">{{ conversation.last_message }}</span>
+          </button>
+          <button
+            class="conversation-delete"
+            type="button"
+            title="删除对话"
+            @click.stop="deleteConversation(conversation.id)"
+          >
+            删除
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -293,6 +303,27 @@ async function selectConversation(id) {
   editableTitle.value = detail.conversation.title
   messages.value = detail.messages
   await scrollToBottom()
+}
+
+async function deleteConversation(id) {
+  if (loading.value) return
+  const conversation = conversations.value.find((item) => item.id === id)
+  const ok = window.confirm(`确定删除「${conversation?.title || '这段对话'}」吗？删除后无法恢复。`)
+  if (!ok) return
+
+  await api.deleteConversation(id)
+  await loadConversations()
+
+  if (activeConversation.value?.id === id) {
+    activeConversation.value = null
+    editableTitle.value = ''
+    messages.value = []
+    if (conversations.value.length) {
+      await selectConversation(conversations.value[0].id)
+    } else {
+      await createNewConversation()
+    }
+  }
 }
 
 async function setMode(mode) {

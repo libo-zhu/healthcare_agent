@@ -248,7 +248,9 @@ textarea:focus {
 
 .conversation-item {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
   width: 100%;
   min-height: 78px;
   padding: 12px;
@@ -257,6 +259,34 @@ textarea:focus {
   text-align: left;
   background: transparent;
   color: #17362f;
+}
+
+.conversation-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.conversation-delete {
+  align-self: start;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #e3c9c9;
+  border-radius: 6px;
+  background: #fff7f7;
+  color: #9a3f3f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.conversation-delete:hover {
+  border-color: #dbaaaa;
+  background: #ffecec;
 }
 
 .conversation-item.active,

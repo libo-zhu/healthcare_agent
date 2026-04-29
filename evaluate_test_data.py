@@ -20,6 +20,7 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from healthcare_agent.agent import arun_general_health_assessment, arun_healthcare_assessment
+from healthcare_agent.config import DEFAULT_BASE_URL, DEFAULT_MODEL, get_deepseek_api_key
 from healthcare_agent.knowledge_base import warmup_rag_dependencies
 
 
@@ -117,14 +118,30 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--runner",
-        choices=["direct", "api"],
+        choices=["direct", "api", "deepseek"],
         default="direct",
-        help="Use local Python calls or call a running FastAPI service.",
+        help="Use local agent calls, a running FastAPI service, or direct DeepSeek API baseline.",
     )
     parser.add_argument(
         "--api-base-url",
         default="http://127.0.0.1:8000",
         help="Base URL for API mode.",
+    )
+    parser.add_argument(
+        "--deepseek-model",
+        default=DEFAULT_MODEL,
+        help="DeepSeek model name for the direct DeepSeek baseline runner.",
+    )
+    parser.add_argument(
+        "--deepseek-base-url",
+        default=DEFAULT_BASE_URL,
+        help="DeepSeek API base URL for the direct DeepSeek baseline runner.",
+    )
+    parser.add_argument(
+        "--deepseek-timeout-seconds",
+        type=int,
+        default=300,
+        help="HTTP timeout for direct DeepSeek baseline calls.",
     )
     parser.add_argument(
         "--concurrency",
@@ -281,6 +298,94 @@ async def run_api_case(case: dict[str, Any], mode: str, api_base_url: str) -> di
     return await asyncio.to_thread(run_api_case_sync, case, mode, api_base_url)
 
 
+def build_deepseek_baseline_prompt(case: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            "你是一名谨慎的健康评估助手。请根据用户提供的信息给出中文健康评估建议。",
+            "要求：",
+            "1. 不要假设用户没有提供的检查结果、诊断或病史。",
+            "2. 优先指出可能的风险、需要补充的信息、生活方式建议和就医/复查建议。",
+            "3. 高风险或急症信号要明确建议尽快就医或急诊。",
+            "4. 说明本回答不能替代医生诊断。",
+            "",
+            "用户输入：",
+            str(case["input_text"]),
+        ]
+    )
+
+
+def run_deepseek_case_sync(
+    case: dict[str, Any],
+    *,
+    model: str,
+    base_url: str,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    body = {
+        "model": model,
+        "temperature": 0.2,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a careful Chinese healthcare assessment assistant.",
+            },
+            {"role": "user", "content": build_deepseek_baseline_prompt(case)},
+        ],
+    }
+    req = request.Request(
+        url=url,
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {get_deepseek_api_key()}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=timeout_seconds) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"DeepSeek HTTP {exc.code}: {details}") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"Failed to reach DeepSeek API: {exc.reason}") from exc
+
+    message = payload["choices"][0]["message"]
+    usage = payload.get("usage", {})
+    prompt_tokens = int(usage.get("prompt_tokens") or 0)
+    completion_tokens = int(usage.get("completion_tokens") or 0)
+    total_tokens = int(usage.get("total_tokens") or prompt_tokens + completion_tokens)
+    return {
+        "agent_name": "deepseek_direct_baseline",
+        "routed_agent_names": [],
+        "route_reason": "direct DeepSeek API baseline without router or RAG",
+        "content": str(message.get("content", "")),
+        "rewritten_query": None,
+        "input_tokens": prompt_tokens,
+        "output_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "reasoning_time_seconds": 0.0,
+        "knowledge_chunks": [],
+    }
+
+
+async def run_deepseek_case(
+    case: dict[str, Any],
+    *,
+    model: str,
+    base_url: str,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        run_deepseek_case_sync,
+        case,
+        model=model,
+        base_url=base_url,
+        timeout_seconds=timeout_seconds,
+    )
+
+
 def build_case_result(
     case: dict[str, Any],
     raw_result: dict[str, Any],
@@ -385,8 +490,8 @@ def build_summary(results: list[EvalCaseResult], mode: str, runner: str, dataset
     ok_results = [result for result in results if result.status == "ok"]
     error_results = [result for result in results if result.status != "ok"]
 
-    route_results = [result for result in ok_results if result.gold_route]
-    rag_results = ok_results
+    route_results = [result for result in ok_results if result.gold_route] if runner != "deepseek" else []
+    rag_results = ok_results if runner != "deepseek" else []
     high_risk_results = [result for result in ok_results if result.risk_level == "high"]
 
     route_precisions = [result.auto_metrics["route"]["precision"] for result in route_results]
@@ -598,6 +703,26 @@ def build_how_to_use_markdown(summary: dict[str, Any]) -> str:
 
 然后把每轮的 `summary.json` 拿出来汇总成论文表格。
 
+### 5. Agent vs DeepSeek baseline 对比
+
+直接调用 DeepSeek API，不经过你构建的 agent/router/RAG：
+
+```bash
+python evaluate_test_data.py --runner deepseek --mode specialist --concurrency 2
+```
+
+拿 agent 结果和 DeepSeek baseline 结果做成对 LLM-as-a-judge：
+
+```bash
+python judge_pairwise_comparison.py \
+  --agent-results-jsonl path/to/agent/per_case_results.jsonl \
+  --deepseek-results-jsonl path/to/deepseek/per_case_results.jsonl \
+  --output-csv path/to/pairwise_comparison.csv \
+  --output-jsonl path/to/pairwise_comparison.jsonl \
+  --summary-json path/to/pairwise_summary.json \
+  --overwrite
+```
+
 ## 本次运行摘要
 
 ```json
@@ -614,6 +739,9 @@ async def evaluate_case(
     mode: str,
     runner: str,
     api_base_url: str,
+    deepseek_model: str,
+    deepseek_base_url: str,
+    deepseek_timeout_seconds: int,
 ) -> EvalCaseResult:
     async with semaphore:
         start = perf_counter()
@@ -621,8 +749,15 @@ async def evaluate_case(
         try:
             if runner == "direct":
                 raw_result = await run_direct_case(case, mode)
-            else:
+            elif runner == "api":
                 raw_result = await run_api_case(case, mode, api_base_url)
+            else:
+                raw_result = await run_deepseek_case(
+                    case,
+                    model=deepseek_model,
+                    base_url=deepseek_base_url,
+                    timeout_seconds=deepseek_timeout_seconds,
+                )
             elapsed = perf_counter() - start
             result = build_case_result(case, raw_result, elapsed, mode, runner)
             route_preview = ",".join(result.predicted_route) if result.predicted_route else "-"
@@ -647,6 +782,9 @@ async def main_async(args: argparse.Namespace) -> None:
         "mode": args.mode,
         "runner": args.runner,
         "api_base_url": args.api_base_url,
+        "deepseek_model": args.deepseek_model,
+        "deepseek_base_url": args.deepseek_base_url,
+        "deepseek_timeout_seconds": args.deepseek_timeout_seconds,
         "concurrency": args.concurrency,
         "limit": args.limit,
         "output_dir": str(output_dir.resolve()),
@@ -674,6 +812,9 @@ async def main_async(args: argparse.Namespace) -> None:
                 mode=args.mode,
                 runner=args.runner,
                 api_base_url=args.api_base_url,
+                deepseek_model=args.deepseek_model,
+                deepseek_base_url=args.deepseek_base_url,
+                deepseek_timeout_seconds=args.deepseek_timeout_seconds,
             )
         )
         for index, case in enumerate(dataset, start=1)
