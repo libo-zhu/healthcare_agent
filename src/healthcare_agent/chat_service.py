@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Literal
 
 from fastapi import HTTPException, status
@@ -10,8 +11,8 @@ from healthcare_agent.database import get_connection
 
 
 ConversationMode = Literal["specialist", "general"]
-MAX_CONTEXT_MESSAGES = 10
-MAX_CONTEXT_CHARS_PER_MESSAGE = 2400
+MAX_CONTEXT_MESSAGES = 8
+logger = logging.getLogger(__name__)
 
 
 def serialize_metadata(payload: Any) -> str:
@@ -104,6 +105,34 @@ def list_messages(user_id: int, conversation_id: int) -> list[dict[str, Any]]:
     return rows
 
 
+def list_recent_context_messages(
+    user_id: int,
+    conversation_id: int,
+    limit: int = MAX_CONTEXT_MESSAGES,
+) -> list[dict[str, Any]]:
+    get_conversation(user_id, conversation_id)
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, role, content, metadata_json, created_at
+                FROM (
+                    SELECT id, role, content, metadata_json, created_at
+                    FROM messages
+                    WHERE conversation_id=%s
+                    ORDER BY id DESC
+                    LIMIT %s
+                ) recent_messages
+                ORDER BY id ASC
+                """,
+                (conversation_id, max(limit, 1)),
+            )
+            rows = list(cursor.fetchall())
+    for row in rows:
+        row["metadata"] = deserialize_metadata(row.pop("metadata_json", None))
+    return rows
+
+
 def update_conversation(
     user_id: int,
     conversation_id: int,
@@ -165,43 +194,22 @@ def insert_message(
             return int(cursor.lastrowid)
 
 
-def truncate_context_text(value: str, max_chars: int = MAX_CONTEXT_CHARS_PER_MESSAGE) -> str:
-    text = value.strip()
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars] + "\n...[历史内容过长，已截断]"
-
-
 def format_message_for_context(message: dict[str, Any]) -> str:
-    role_label = "用户" if message["role"] == "user" else "健康评估助手"
-    content = truncate_context_text(str(message.get("content", "")))
-    metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
-    preprocessed_text = ""
-    if message["role"] == "user":
-        preprocessed_text = str(metadata.get("preprocessed_text") or "").strip()
-
-    if preprocessed_text and preprocessed_text != message.get("content"):
-        parsed_text = truncate_context_text(preprocessed_text)
-        return "\n".join(
-            [
-                f"{role_label}: {content}",
-                "用户上传/输入资料解析结果:",
-                parsed_text,
-            ]
-        )
+    role_label = "用户原始输入" if message["role"] == "user" else "Agent最终答复"
+    content = str(message.get("content", "")).strip()
     return f"{role_label}: {content}"
 
 
 def build_contextual_medical_data(history: list[dict[str, Any]], user_message: str) -> str:
-    recent_history = history[-MAX_CONTEXT_MESSAGES:]
-    if not recent_history:
+    if not history:
         return user_message
 
-    formatted_messages = [format_message_for_context(message) for message in recent_history]
+    formatted_messages = [format_message_for_context(message) for message in history[-MAX_CONTEXT_MESSAGES:]]
 
     return "\n".join(
         [
             "以下是同一用户在当前健康评估对话中的历史上下文。请只把它作为理解用户当前问题的背景，不要虚构新的检查结果或病史。",
+            "历史上下文只包含用户原始输入和 Agent 最终答复，不包含 rewrite、路由、分诊、检索或其他中间过程。",
             "",
             "历史对话：",
             "\n\n".join(formatted_messages),
@@ -210,6 +218,19 @@ def build_contextual_medical_data(history: list[dict[str, Any]], user_message: s
             user_message,
         ]
     )
+
+
+def context_diagnostics(history: list[dict[str, Any]], contextual_input: str) -> dict[str, int]:
+    user_chars = sum(len(str(message.get("content", ""))) for message in history if message.get("role") == "user")
+    assistant_chars = sum(
+        len(str(message.get("content", ""))) for message in history if message.get("role") == "assistant"
+    )
+    return {
+        "history_messages": len(history),
+        "history_user_chars": user_chars,
+        "history_assistant_chars": assistant_chars,
+        "contextual_input_chars": len(contextual_input),
+    }
 
 
 def result_to_metadata(result: Any, mode: ConversationMode) -> dict[str, Any]:
@@ -243,8 +264,15 @@ async def run_chat_turn(
     if active_mode != conversation["mode"]:
         conversation = update_conversation(user_id, conversation_id, mode=active_mode)
 
-    history = list_messages(user_id, conversation_id)
+    history = list_recent_context_messages(user_id, conversation_id)
     contextual_input = build_contextual_medical_data(history, user_message)
+    logger.warning(
+        "TOKEN_DIAG chat_context user_id=%s conversation_id=%s mode=%s %s",
+        user_id,
+        conversation_id,
+        active_mode,
+        context_diagnostics(history, contextual_input),
+    )
     user_message_id = insert_message(conversation_id, "user", user_message)
 
     if len(history) == 0 and conversation["title"] == "新的健康评估":

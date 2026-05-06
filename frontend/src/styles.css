@@ -106,8 +106,7 @@ h1 {
   box-shadow: 0 24px 80px rgba(9, 43, 52, 0.26);
 }
 
-.segmented,
-.mode-switch {
+.segmented {
   display: grid;
   grid-template-columns: 1fr 1fr;
   padding: 4px;
@@ -116,8 +115,7 @@ h1 {
   background: #dfeae5;
 }
 
-.segmented button,
-.mode-switch button {
+.segmented button {
   min-height: 38px;
   border: 0;
   border-radius: 6px;
@@ -126,8 +124,7 @@ h1 {
   font-weight: 700;
 }
 
-.segmented button.active,
-.mode-switch button.active {
+.segmented button.active {
   color: #0d4d42;
   background: #fff;
   box-shadow: 0 6px 16px rgba(16, 66, 54, 0.12);
@@ -302,7 +299,6 @@ textarea:focus {
   font-weight: 800;
 }
 
-.conversation-meta,
 .conversation-preview,
 .muted,
 small {
@@ -341,10 +337,6 @@ small {
 
 .title-input:focus {
   box-shadow: none;
-}
-
-.mode-switch {
-  width: 220px;
 }
 
 .health-strip {
@@ -580,43 +572,51 @@ small {
   margin: 0 0 8px;
 }
 
-.metric-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 0;
-}
-
-.metric-row span {
-  color: #607970;
-}
-
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.tag-list span {
-  padding: 6px 8px;
-  border-radius: 999px;
-  background: #e1f0eb;
-  color: #145b4f;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .source-list {
   display: grid;
   gap: 10px;
 }
 
-.source-list article {
-  padding: 12px;
+.source-card {
   border: 1px solid #d5e4df;
   border-radius: 8px;
   background: #fff;
+  overflow: hidden;
+}
+
+.source-card summary {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.source-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.source-card summary::after {
+  content: "查看详情";
+  justify-self: start;
+  margin-top: 2px;
+  color: #0d6d5f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.source-card[open] summary::after {
+  content: "收起详情";
+}
+
+.source-index {
+  width: max-content;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #e1f0eb;
+  color: #145b4f;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .source-list strong,
@@ -633,6 +633,39 @@ small {
   color: #38564f;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.source-detail {
+  padding: 0 12px 12px;
+}
+
+.source-detail dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.source-detail dt {
+  color: #607970;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.source-detail dd {
+  margin: -4px 0 0;
+  color: #244940;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.source-detail p {
+  display: block;
+  margin: 0;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  color: #244940;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 1100px) {
@@ -685,8 +718,7 @@ small {
     align-items: stretch;
   }
 
-  .title-input,
-  .mode-switch {
+  .title-input {
     width: 100%;
   }
 

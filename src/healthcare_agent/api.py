@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 
 import pymysql
@@ -11,12 +12,14 @@ from fastapi.responses import StreamingResponse
 from healthcare_agent.auth import create_access_token, get_current_user, hash_password, verify_password
 from healthcare_agent.chat_service import (
     build_contextual_medical_data,
+    context_diagnostics,
     create_conversation,
     delete_conversation,
     get_conversation,
     insert_message,
     list_conversations,
     list_messages,
+    list_recent_context_messages,
     run_chat_turn,
     update_conversation,
 )
@@ -48,6 +51,8 @@ from healthcare_agent.schemas import (
 )
 from healthcare_agent.preprocessing import build_preprocessed_input
 
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Healthcare Agent API",
@@ -210,8 +215,16 @@ async def persistent_chat_sse_event_generator(
     if mode != conversation["mode"]:
         conversation = update_conversation(user_id, conversation_id, mode=mode)  # type: ignore[arg-type]
 
-    history = list_messages(user_id, conversation_id)
+    history = list_recent_context_messages(user_id, conversation_id)
     contextual_input = build_contextual_medical_data(history, agent_input)
+    logger.warning(
+        "TOKEN_DIAG stream_chat_context user_id=%s conversation_id=%s mode=%s source=%s %s",
+        user_id,
+        conversation_id,
+        mode,
+        source_event.get("source_summary") if source_event else "inline_text",
+        context_diagnostics(history, contextual_input),
+    )
     user_message_id = insert_message(
         conversation_id,
         "user",

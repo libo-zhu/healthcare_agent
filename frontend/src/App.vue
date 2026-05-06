@@ -61,7 +61,6 @@
         >
           <button class="conversation-main" type="button">
             <span class="conversation-title">{{ conversation.title }}</span>
-            <span class="conversation-meta">{{ modeLabel(conversation.mode) }}</span>
             <span v-if="conversation.last_message" class="conversation-preview">{{ conversation.last_message }}</span>
           </button>
           <button
@@ -87,10 +86,6 @@
             @blur="saveTitle"
             @keydown.enter.prevent="saveTitle"
           />
-        </div>
-        <div class="mode-switch">
-          <button :class="{ active: activeMode === 'specialist' }" @click="setMode('specialist')">专科路由</button>
-          <button :class="{ active: activeMode === 'general' }" @click="setMode('general')">全科综合</button>
         </div>
       </header>
 
@@ -162,30 +157,31 @@
     </section>
 
     <aside class="insight-panel">
-      <section>
-        <p class="eyebrow">当前评估模式</p>
-        <h3>{{ modeLabel(activeMode) }}</h3>
-        <p class="muted">{{ activeMode === 'specialist' ? '先由路由智能体选择相关专科，再汇总成综合建议。' : '不做专科路由，直接从整体健康视角输出评估。' }}</p>
-      </section>
-
-      <section v-if="latestMetadata">
-        <p class="eyebrow">路由与耗时</p>
-        <div class="metric-row"><span>Agent</span><strong>{{ latestMetadata.agent_name }}</strong></div>
-        <div class="metric-row"><span>Token</span><strong>{{ latestMetadata.total_tokens || 0 }}</strong></div>
-        <div class="metric-row"><span>耗时</span><strong>{{ latestMetadata.reasoning_time_seconds || 0 }}s</strong></div>
-        <div v-if="latestMetadata.routed_agent_names?.length" class="tag-list">
-          <span v-for="name in latestMetadata.routed_agent_names" :key="name">{{ agentLabel(name) }}</span>
-        </div>
-      </section>
-
       <section v-if="knowledgeChunks.length">
         <p class="eyebrow">知识库依据</p>
         <div class="source-list">
-          <article v-for="(chunk, index) in knowledgeChunks.slice(0, 5)" :key="`${chunk.source_file}-${index}`">
-            <strong>{{ chunk.source_file }}</strong>
-            <small>{{ chunk.section_path }}</small>
-            <p>{{ chunk.content }}</p>
-          </article>
+          <details
+            v-for="(source, index) in knowledgeSources"
+            :key="`${source.sourceFile}-${index}`"
+            class="source-card"
+            :open="index === 0"
+          >
+            <summary>
+              <span class="source-index">依据 {{ index + 1 }}</span>
+              <strong>{{ source.title }}</strong>
+              <small>{{ source.path }}</small>
+              <p>{{ source.summary }}</p>
+            </summary>
+            <div class="source-detail">
+              <dl v-if="source.items.length">
+                <template v-for="item in source.items" :key="`${source.sourceFile}-${item.label}-${item.value}`">
+                  <dt>{{ item.label }}</dt>
+                  <dd>{{ item.value }}</dd>
+                </template>
+              </dl>
+              <p v-else>{{ source.fullText }}</p>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -222,28 +218,12 @@ const starters = [
   '父亲62岁，空腹血糖7.8，血脂偏高，平时久坐，想做综合评估。'
 ]
 
-const activeMode = computed(() => activeConversation.value?.mode || 'specialist')
 const latestMetadata = computed(() => {
   const latestAssistant = [...messages.value].reverse().find((item) => item.role === 'assistant' && item.metadata)
   return latestAssistant?.metadata || null
 })
 const knowledgeChunks = computed(() => latestMetadata.value?.knowledge_chunks || [])
-
-function modeLabel(mode) {
-  return mode === 'general' ? '全科综合' : '专科路由'
-}
-
-function agentLabel(name) {
-  const labels = {
-    sleep_activity_nicotine: '睡眠/活动/尼古丁',
-    diet_bmi: '饮食/BMI',
-    cardiometabolic_health: '血压/血脂/血糖',
-    mental_social_health: '心理/社会因素',
-    specialist_summary: '专科总结',
-    general_health_overview: '全科综合'
-  }
-  return labels[name] || name
-}
+const knowledgeSources = computed(() => knowledgeChunks.value.slice(0, 6).map(normalizeKnowledgeChunk))
 
 async function submitAuth() {
   errorMessage.value = ''
@@ -291,7 +271,7 @@ async function loadConversations() {
 async function createNewConversation() {
   const conversation = await api.createConversation({
     title: '新的健康评估',
-    mode: activeConversation.value?.mode || 'specialist'
+    mode: 'specialist'
   })
   await loadConversations()
   await selectConversation(conversation.id)
@@ -324,12 +304,6 @@ async function deleteConversation(id) {
       await createNewConversation()
     }
   }
-}
-
-async function setMode(mode) {
-  if (!activeConversation.value || activeConversation.value.mode === mode) return
-  activeConversation.value = await api.updateConversation(activeConversation.value.id, { mode })
-  await loadConversations()
 }
 
 async function saveTitle() {
@@ -403,7 +377,7 @@ async function send() {
     if (files.length) {
       const formData = new FormData()
       formData.append('medical_data', content)
-      formData.append('mode', activeMode.value)
+      formData.append('mode', 'specialist')
       for (const file of files) {
         formData.append('files', file)
       }
@@ -411,7 +385,7 @@ async function send() {
     } else {
       await api.streamMessage(activeConversation.value.id, {
         content,
-        mode: activeMode.value
+        mode: 'specialist'
       }, onEvent)
     }
     await loadConversations()
@@ -442,6 +416,77 @@ function buildVisibleUserContent(content, files) {
   if (content) parts.push(content)
   if (files.length) parts.push(`上传资料：${files.map((file) => file.name).join('、')}`)
   return parts.join('\n')
+}
+
+function normalizeKnowledgeChunk(chunk) {
+  const sourceFile = chunk.source_file || '知识库依据'
+  const title = stripJsonExtension(sourceFile)
+  const items = parseKnowledgeItems(chunk.content || '')
+  const path = formatKnowledgePath(chunk.section_path, items)
+  const summary = buildKnowledgeSummary(items, chunk.content)
+  return {
+    sourceFile,
+    title,
+    path,
+    summary,
+    items,
+    fullText: chunk.content || ''
+  }
+}
+
+function stripJsonExtension(value) {
+  return String(value).replace(/\.json$/i, '')
+}
+
+function parseKnowledgeItems(content) {
+  return String(content || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(.+?):\s*(.*)$/)
+      if (!match) return { label: '内容', value: line }
+      return {
+        label: formatKnowledgeKey(match[1]),
+        value: match[2]
+      }
+    })
+    .filter((item) => item.value)
+}
+
+function formatKnowledgeKey(value) {
+  const cleaned = String(value)
+    .replace(/^root\.?/, '')
+    .replace(/children\[\d+\]\.?/g, '')
+    .replace(/\.+/g, '.')
+    .replace(/^\./, '')
+
+  const labels = {
+    topic: '主题',
+    content: '依据内容'
+  }
+  return labels[cleaned] || cleaned || '内容'
+}
+
+function formatKnowledgePath(sectionPath, items) {
+  const topics = items
+    .filter((item) => item.label === '主题')
+    .map((item) => item.value)
+  if (topics.length) return topics.join(' / ')
+
+  const cleaned = String(sectionPath || '')
+    .replace(/^root\.?/, '')
+    .replace(/children\[(\d+)\]/g, '第 $1 节')
+    .replace(/\./g, ' / ')
+    .trim()
+  return cleaned || '相关知识片段'
+}
+
+function buildKnowledgeSummary(items, fallback) {
+  const contentItem = items.find((item) => item.label === '依据内容')
+  const raw = contentItem?.value || String(fallback || '')
+  const compact = raw.replace(/\s+/g, ' ').trim()
+  return compact.length > 94 ? `${compact.slice(0, 94)}...` : compact
 }
 
 function escapeHtml(value) {

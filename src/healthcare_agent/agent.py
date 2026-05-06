@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from time import perf_counter
 from typing import Any
@@ -33,6 +34,7 @@ from healthcare_agent.schemas import (
 
 SUMMARY_AGENT_NAME = "specialist_summary"
 SUMMARY_AGENT_LABEL = "Specialist Summary"
+logger = logging.getLogger(__name__)
 
 
 def build_chat_model() -> ChatDeepSeek:
@@ -81,7 +83,19 @@ def run_healthcare_assessment(medical_data: str) -> AssessmentResult:
 async def arun_healthcare_assessment(medical_data: str) -> AssessmentResult:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = await rewrite_medical_data(medical_data)
+    logger.warning(
+        "TOKEN_DIAG specialist_direct phase=rewrite input_chars=%s rewritten_chars=%s usage=%s",
+        len(medical_data),
+        len(rewritten_query),
+        rewrite_usage.model_dump(),
+    )
     decision, router_usage = await route_to_specialists(rewritten_query)
+    logger.warning(
+        "TOKEN_DIAG specialist_direct phase=router rewritten_chars=%s agents=%s usage=%s",
+        len(rewritten_query),
+        decision.agent_names,
+        router_usage.model_dump(),
+    )
     specialist_assessments = await run_parallel_specialist_assessments(
         rewritten_query,
         decision.agent_names,
@@ -93,6 +107,17 @@ async def arun_healthcare_assessment(medical_data: str) -> AssessmentResult:
     summary_content, summary_usage = await summarize_specialist_assessments(
         rewritten_query,
         specialist_assessments,
+    )
+    for assessment in specialist_assessments:
+        logger.warning(
+            "TOKEN_DIAG specialist_direct phase=specialist agent=%s usage=%s",
+            assessment.agent_name,
+            assessment.usage.model_dump(),
+        )
+    logger.warning(
+        "TOKEN_DIAG specialist_direct phase=summary specialist_count=%s usage=%s",
+        len(specialist_assessments),
+        summary_usage.model_dump(),
     )
     combined_chunks = combine_knowledge_chunks(
         specialist_assessments,
@@ -134,6 +159,12 @@ def run_general_health_assessment(medical_data: str) -> AssessmentResult:
 async def arun_general_health_assessment(medical_data: str) -> AssessmentResult:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = await rewrite_medical_data(medical_data)
+    logger.warning(
+        "TOKEN_DIAG general_direct phase=rewrite input_chars=%s rewritten_chars=%s usage=%s",
+        len(medical_data),
+        len(rewritten_query),
+        rewrite_usage.model_dump(),
+    )
     retrieval = await asyncio.to_thread(retrieve_knowledge, rewritten_query)
     chain = build_general_health_chain()
     message = await chain.ainvoke(
@@ -142,13 +173,20 @@ async def arun_general_health_assessment(medical_data: str) -> AssessmentResult:
             "knowledge_context": format_knowledge_context(retrieval.final_chunks),
         }
     )
+    message_usage = extract_token_usage(message)
+    logger.warning(
+        "TOKEN_DIAG general_direct phase=answer rewritten_chars=%s chunks=%s usage=%s",
+        len(rewritten_query),
+        len(retrieval.final_chunks),
+        message_usage.model_dump(),
+    )
     return AssessmentResult(
         agent_name="general_health_overview",
         routed_agent_names=["general_health_overview"],
         route_reason="direct generalist assessment",
         content=extract_message_text(message),
         rewritten_query=rewritten_query,
-        usage=add_token_usage(rewrite_usage, extract_token_usage(message)),
+        usage=add_token_usage(rewrite_usage, message_usage),
         reasoning_time_seconds=round(perf_counter() - start_time, 3),
         knowledge_chunks=to_schema_knowledge_chunks(retrieval.final_chunks),
         coarse_knowledge_chunks=to_schema_knowledge_chunks(retrieval.coarse_chunks),
@@ -159,7 +197,19 @@ async def arun_general_health_assessment(medical_data: str) -> AssessmentResult:
 async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = await rewrite_medical_data(medical_data)
+    logger.warning(
+        "TOKEN_DIAG specialist_stream phase=rewrite input_chars=%s rewritten_chars=%s usage=%s",
+        len(medical_data),
+        len(rewritten_query),
+        rewrite_usage.model_dump(),
+    )
     decision, router_usage = await route_to_specialists(rewritten_query)
+    logger.warning(
+        "TOKEN_DIAG specialist_stream phase=router rewritten_chars=%s agents=%s usage=%s",
+        len(rewritten_query),
+        decision.agent_names,
+        router_usage.model_dump(),
+    )
     yield {
         "type": "rewrite",
         "rewritten_query": rewritten_query,
@@ -184,6 +234,11 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
         assessment = await task
         specialist_assessments.append(assessment)
         specialist_usage = add_token_usage(specialist_usage, assessment.usage)
+        logger.warning(
+            "TOKEN_DIAG specialist_stream phase=specialist agent=%s usage=%s",
+            assessment.agent_name,
+            assessment.usage.model_dump(),
+        )
         yield {
             "type": "knowledge",
             "agent_name": assessment.agent_name,
@@ -238,6 +293,12 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
                 chunk_usage,
             )
 
+    logger.warning(
+        "TOKEN_DIAG specialist_stream phase=summary specialist_count=%s total_usage_so_far=%s output_chars=%s",
+        len(specialist_assessments),
+        final_usage.model_dump(),
+        len("".join(summary_text_parts)),
+    )
     yield {
         "type": "done",
         "agent_name": SUMMARY_AGENT_NAME,
@@ -258,6 +319,12 @@ async def stream_healthcare_assessment(medical_data: str) -> AsyncIterator[dict[
 async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[dict[str, Any]]:
     start_time = perf_counter()
     rewritten_query, rewrite_usage = await rewrite_medical_data(medical_data)
+    logger.warning(
+        "TOKEN_DIAG general_stream phase=rewrite input_chars=%s rewritten_chars=%s usage=%s",
+        len(medical_data),
+        len(rewritten_query),
+        rewrite_usage.model_dump(),
+    )
     retrieval = await asyncio.to_thread(retrieve_knowledge, rewritten_query)
     chain = build_general_health_chain()
     yield {
@@ -292,6 +359,12 @@ async def stream_general_health_assessment(medical_data: str) -> AsyncIterator[d
         if chunk_usage.total_tokens:
             final_usage = add_token_usage(rewrite_usage, chunk_usage)
 
+    logger.warning(
+        "TOKEN_DIAG general_stream phase=answer rewritten_chars=%s chunks=%s total_usage=%s",
+        len(rewritten_query),
+        len(retrieval.final_chunks),
+        final_usage.model_dump(),
+    )
     yield {
         "type": "done",
         "agent_name": "general_health_overview",
