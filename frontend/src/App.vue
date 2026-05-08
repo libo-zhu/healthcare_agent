@@ -163,6 +163,7 @@
           <details
             v-for="(source, index) in knowledgeSources"
             :key="`${source.sourceFile}-${index}`"
+            :id="`knowledge-source-${index + 1}`"
             class="source-card"
             :open="index === 0"
           >
@@ -223,7 +224,7 @@ const latestMetadata = computed(() => {
   return latestAssistant?.metadata || null
 })
 const knowledgeChunks = computed(() => latestMetadata.value?.knowledge_chunks || [])
-const knowledgeSources = computed(() => knowledgeChunks.value.slice(0, 6).map(normalizeKnowledgeChunk))
+const knowledgeSources = computed(() => knowledgeChunks.value.map(normalizeKnowledgeChunk))
 
 async function submitAuth() {
   errorMessage.value = ''
@@ -502,6 +503,7 @@ function renderInlineMarkdown(value) {
   return value
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+?)`/g, '<code>$1</code>')
+    .replace(/\[来源(\d+)\]/g, '<a class="source-ref" href="#knowledge-source-$1" title="查看知识库依据 $1">[来源$1]</a>')
 }
 
 function renderMarkdown(value) {
@@ -519,7 +521,7 @@ function renderMarkdown(value) {
       }
       continue
     }
-    const heading = line.match(/^(#{1,3})\s+(.+)$/)
+    const heading = line.match(/^(#{1,6})\s+(.+)$/)
     if (heading) {
       if (inList) {
         html.push('</ul>')

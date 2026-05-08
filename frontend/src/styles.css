@@ -468,7 +468,10 @@ small {
 
 .markdown-body h1,
 .markdown-body h2,
-.markdown-body h3 {
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
   margin: 12px 0 8px;
   color: #173d35;
   line-height: 1.25;
@@ -484,6 +487,15 @@ small {
 
 .markdown-body h3 {
   font-size: 17px;
+}
+
+.markdown-body h4 {
+  font-size: 15px;
+}
+
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 14px;
 }
 
 .markdown-body ul {
@@ -504,6 +516,21 @@ small {
   border-radius: 5px;
   background: #edf5f1;
   color: #17483f;
+}
+
+.source-ref {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: #0b6fd3;
+  background: #e8f2ff;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.source-ref:hover {
+  color: #084f99;
+  background: #d8eaff;
 }
 
 .composer {
@@ -582,6 +609,13 @@ small {
   border-radius: 8px;
   background: #fff;
   overflow: hidden;
+  scroll-margin-top: 16px;
+}
+
+.source-card:target {
+  border-color: #0b6fd3;
+  background: #f2f7ff;
+  box-shadow: 0 0 0 3px rgba(11, 111, 211, 0.14);
 }
 
 .source-card summary {
