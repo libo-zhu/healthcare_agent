@@ -1,48 +1,78 @@
-# healthcare_agent
+# Healthcare Agent
 
-毕业设计项目：面向健康评估的智能 agent 系统。当前仓库包含 agent 编排、FastAPI 接口、本地 JSON 知识库 RAG、文件上传预处理、MySQL 用户与会话持久化、Vue 前端、批量评测脚本。
+面向健康评估的多 Agent + RAG 系统。本仓库是本科毕业设计《面向健康评估的智能 Agent 系统开发》的核心工程代码，包含后端 Agent 编排、医学知识库检索、FastAPI 接口、Vue 前端工作台和论文定稿使用的最终实验结果。
 
-面向后续后端与前端网页开发的完整对齐文档见：
+## 项目亮点
 
-- [docs/DEVELOPMENT_ALIGNMENT.md](docs/DEVELOPMENT_ALIGNMENT.md)
+- 多阶段 Agent 流程：健康信息规范化、专科路由、RAG 检索、四类专科分析、综合总结。
+- 本地医学知识库：覆盖血压、血糖、血脂、饮食、BMI、睡眠、运动、戒烟、心理健康与社会决定因素等主题。
+- 知识增强生成：使用 Chroma 向量召回和 CrossEncoder 重排序，为专科 Agent 注入相关知识片段。
+- 多源输入处理：支持文本、PDF、CSV、TXT 和图片 OCR，适合体检报告和口语化健康咨询。
+- 网站平台：FastAPI 后端 + Vue 前端，支持登录、会话管理、文件上传、流式响应和知识依据展示。
+- 实验评估：使用 80 条健康咨询样本，与 DeepSeek V4 直接调用基线对比，并采用 GPT-5.5 high 进行 KB-aware 成对评审。
 
-后续如果接口、agent 流程、知识库格式或前端解析方式发生变化，请同步更新这份文档，避免前后端信息不一致。
+## 最终实验结果
 
-## 当前能力
+以下结果以 `../thesis/本科毕设论文-朱力波.docx` 定稿第 4 章为准。
 
-- 基于 LangChain + DeepSeek 的健康评估 agent。
-- `1 个 rewrite agent + 1 个 router agent + 4 个专科 agent + 1 个专科总结 agent` 的专科流程。
-- 额外提供 `general_health_overview` 全科综合分析流程。
-- 基于本地 JSON 知识库的 RAG：Chroma 粗召回 + CrossEncoder reranker 重排。
-- 支持普通 JSON 接口和 SSE 流式接口。
-- 支持注册、登录、新建会话、对话历史持久化和轻量上下文记忆。
-- 提供 Vue 健康评估工作台，包含会话列表、模式切换、病例文件上传、流式回答和知识依据侧栏。
-- 支持上传 `.txt`、`.csv`、`.pdf` 和常见图片格式；图片 OCR 依赖本机 `tesseract`。
-- 提供自动评测与 LLM-as-a-judge 辅助评分脚本。
+| 指标 | 结果 |
+| --- | ---: |
+| 测试样本数 | 80 |
+| 路由准确率 | 0.8729 |
+| 路由召回率 | 0.9875 |
+| 路由 F1 值 | 0.9058 |
+| RAG 检索准确率 | 0.4860 |
+| RAG 检索召回率 | 0.8152 |
+| RAG 检索 F1 值 | 0.5805 |
+| 高风险样本紧急提示覆盖率 | 100% |
+| 高风险样本延误提示率 | 0% |
+| Agent 更优 / DeepSeek 更优 / 二者相当 | 35 / 3 / 42 |
+| Agent 不劣于基线比例 | 96.25% |
+
+四维评分结果：
+
+| 评价维度 | Healthcare Agent | DeepSeek V4 | 差值 |
+| --- | ---: | ---: | ---: |
+| 正确性 | 4.3000 | 4.4875 | -0.1875 |
+| 覆盖度 | 4.9500 | 4.5375 | +0.4125 |
+| 依据充分性 | 4.6875 | 4.0125 | +0.6750 |
+| 安全性 | 4.8750 | 4.8500 | +0.0250 |
+
+论文定稿对应的实验文件：
+
+```text
+eval_results/20260428_185414_specialist_direct/      # Healthcare Agent 最终运行结果
+eval_results/20260428_190657_specialist_deepseek/    # DeepSeek V4 直接调用基线
+eval_results/gpt55_high_kb_aware_judge/              # GPT-5.5 high KB-aware 成对评审
+eval_results/EXPERIMENT_ANALYSIS.md                  # 实验分析汇总
+```
 
 ## 项目结构
 
 ```text
 src/healthcare_agent/
-  agent.py            # agent 编排、流式事件、token 聚合
+  agent.py            # Agent 编排、流式事件、token 聚合
   api.py              # FastAPI 接口
-  cli.py              # 命令行入口
-  config.py           # 环境变量与默认配置
-  knowledge_base.py   # JSON 知识库索引、检索、重排
-  preprocessing.py    # 文件解析、PDF 提取、图片 OCR
-  prompts.py          # router/rewrite/专科/全科/总结 prompt
-  schemas.py          # 请求响应 schema
-  database.py         # MySQL 连接与表结构初始化
   auth.py             # 登录 token、密码哈希、当前用户
   chat_service.py     # 会话、消息、上下文评估
+  cli.py              # 命令行入口
+  config.py           # 环境变量与默认配置
+  database.py         # MySQL 连接与表结构初始化
+  knowledge_base.py   # JSON 知识库索引、检索、重排
+  preprocessing.py    # 文件解析、PDF 提取、图片 OCR
+  prompts.py          # 规范化、路由、专科、全科、总结 prompt
+  schemas.py          # 请求响应 schema
 
-frontend/             # Vue 健康评估网页
+frontend/             # Vue 健康评估工作台
 knowledge_base/       # 本地医学 JSON 知识库
-evaluate_test_data.py # 批量评测
-judge_manual_review.py# LLM-as-a-judge 评分
+eval_results/         # 最终实验结果与分析
+docs/                 # 开发对齐文档和项目周志
+evaluate_test_data.py # 批量评测脚本
+judge_manual_review.py
+judge_pairwise_comparison.py
 main.py               # CLI 启动入口
 run_api.py            # FastAPI 启动入口
-test_data.json        # 评测数据
+test_data.json        # 80 条实验测试样本
 ```
 
 ## 快速开始
@@ -54,16 +84,15 @@ pip install -e .
 cp .env.example .env
 ```
 
-把 `.env` 里的 `DEEPSEEK_API_KEY` 改成真实 key。
-
-常用 RAG 配置：
+在 `.env` 中配置 DeepSeek、MySQL 和 RAG 参数：
 
 ```env
+DEEPSEEK_API_KEY=your_api_key
 AUTH_SECRET_KEY=replace_with_a_random_local_secret
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_USER=root
-MYSQL_PASSWORD=zhu203926
+MYSQL_PASSWORD=your_password
 MYSQL_DATABASE=healthcare_agent_app
 RAG_ENABLED=true
 RAG_AUTO_BUILD=true
@@ -77,16 +106,10 @@ EMBEDDING_MODEL_NAME=BAAI/bge-small-zh-v1.5
 RERANKER_MODEL_NAME=BAAI/bge-reranker-base
 ```
 
-构建知识库索引：
+构建或重建知识库索引：
 
 ```bash
 python main.py --rebuild-kb
-```
-
-查看知识库状态：
-
-```bash
-python main.py --kb-status
 ```
 
 命令行试用：
@@ -95,23 +118,13 @@ python main.py --kb-status
 python main.py
 ```
 
-启动 API：
+启动后端 API：
 
 ```bash
 python run_api.py
 ```
 
-默认地址：
-
-```text
-http://127.0.0.1:8000
-```
-
-Swagger：
-
-```text
-http://127.0.0.1:8000/docs
-```
+默认接口地址为 `http://127.0.0.1:8000`，Swagger 文档为 `http://127.0.0.1:8000/docs`。
 
 启动前端：
 
@@ -121,52 +134,23 @@ npm install
 npm run dev
 ```
 
-前端地址：
-
-```text
-http://localhost:5173/
-```
+前端默认地址为 `http://localhost:5173/`。
 
 ## 核心接口
 
-文本评估：
-
-- `POST /api/v1/specialist/assessment`
-- `POST /api/v1/general/assessment`
-
-文本流式评估：
-
-- `POST /api/v1/specialist/assessment/stream`
-- `POST /api/v1/general/assessment/stream`
-
-文件上传评估：
-
-- `POST /api/v1/specialist/assessment/files`
-- `POST /api/v1/general/assessment/files`
-
-文件上传流式评估：
-
-- `POST /api/v1/specialist/assessment/files/stream`
-- `POST /api/v1/general/assessment/files/stream`
-
-知识库：
-
-- `GET /api/v1/knowledge-base/status`
-- `POST /api/v1/knowledge-base/rebuild`
-
-登录与会话：
-
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `GET /api/v1/auth/me`
-- `GET /api/v1/conversations`
-- `POST /api/v1/conversations`
-- `GET /api/v1/conversations/{conversation_id}`
-- `PATCH /api/v1/conversations/{conversation_id}`
-- `DELETE /api/v1/conversations/{conversation_id}`
-- `POST /api/v1/conversations/{conversation_id}/messages`
-- `POST /api/v1/conversations/{conversation_id}/messages/stream`
-- `POST /api/v1/conversations/{conversation_id}/messages/files/stream`
+| 功能 | 接口 |
+| --- | --- |
+| 专科健康评估 | `POST /api/v1/specialist/assessment` |
+| 全科综合评估 | `POST /api/v1/general/assessment` |
+| 专科流式评估 | `POST /api/v1/specialist/assessment/stream` |
+| 全科流式评估 | `POST /api/v1/general/assessment/stream` |
+| 文件上传专科评估 | `POST /api/v1/specialist/assessment/files` |
+| 文件上传全科评估 | `POST /api/v1/general/assessment/files` |
+| 知识库状态 | `GET /api/v1/knowledge-base/status` |
+| 重建知识库 | `POST /api/v1/knowledge-base/rebuild` |
+| 注册 / 登录 | `POST /api/v1/auth/register`、`POST /api/v1/auth/login` |
+| 会话列表 | `GET /api/v1/conversations` |
+| 会话消息 | `POST /api/v1/conversations/{conversation_id}/messages` |
 
 请求示例：
 
@@ -176,13 +160,39 @@ http://localhost:5173/
 }
 ```
 
-完整响应字段、SSE 事件格式、文件上传规则和前端解析注意事项见 [开发对齐文档](docs/DEVELOPMENT_ALIGNMENT.md)。
+更完整的响应字段、SSE 事件格式、文件上传规则和前后端对齐说明见 [docs/DEVELOPMENT_ALIGNMENT.md](docs/DEVELOPMENT_ALIGNMENT.md)。
 
-## 知识库 JSON
+## 复现实验
 
-知识库默认放在 `knowledge_base/`，程序会递归扫描所有 `.json` 文件。
+运行 Healthcare Agent 最终链路：
 
-推荐结构：
+```bash
+python evaluate_test_data.py --mode specialist --runner direct
+```
+
+运行 DeepSeek V4 直接调用基线：
+
+```bash
+python evaluate_test_data.py --mode specialist --runner deepseek
+```
+
+评测结果会写入：
+
+```text
+eval_results/YYYYMMDD_HHMMSS_{mode}_{runner}/
+```
+
+本仓库保留的最终论文结果对应：
+
+```text
+eval_results/20260428_185414_specialist_direct/
+eval_results/20260428_190657_specialist_deepseek/
+eval_results/gpt55_high_kb_aware_judge/
+```
+
+## 知识库格式
+
+知识库默认放在 `knowledge_base/`，程序递归扫描 `.json` 文件。推荐结构：
 
 ```json
 {
@@ -200,53 +210,19 @@ http://localhost:5173/
 }
 ```
 
-`agent_tags` 用于专科检索过滤。当前合法值：
+`agent_tags` 用于专科检索过滤，合法值包括：
 
 - `sleep_activity_nicotine`
 - `diet_bmi`
 - `cardiometabolic_health`
 - `mental_social_health`
 
-修改 JSON 后请重建索引：
+修改知识库后需要重建索引：
 
 ```bash
 python main.py --rebuild-kb
 ```
 
-## 评测
-
-直接调用本地 Python agent：
-
-```bash
-python evaluate_test_data.py --mode specialist --runner direct
-python evaluate_test_data.py --mode general --runner direct
-```
-
-调用已启动的 API：
-
-```bash
-python evaluate_test_data.py --mode specialist --runner api --api-base-url http://127.0.0.1:8000
-```
-
-评测结果会写入：
-
-```text
-eval_results/YYYYMMDD_HHMMSS_{mode}_{runner}/
-```
-
-LLM-as-a-judge 示例：
-
-```bash
-python judge_manual_review.py \
-  --results-jsonl eval_results/<run>/per_case_results.jsonl \
-  --manual-review-csv eval_results/<run>/manual_review.csv \
-  --output-csv eval_results/<run>/manual_review_judged.csv \
-  --output-jsonl eval_results/<run>/judge_results.jsonl \
-  --summary-json eval_results/<run>/judge_summary.json
-```
-
 ## 安全边界
 
-这个系统定位为健康评估和建议辅助，不是确诊系统或处方系统。前端和文档中应使用“健康评估”“风险提示”“建议复查/就医”等表达，避免把输出包装成确定性诊断。
-
-`.gitignore` 已忽略 `.venv/`、`.env`、`.env.*`，保留 `.env.example`。
+本系统定位为健康评估和健康管理建议辅助，不是确诊系统或处方系统。输出应使用“风险提示”“建议复查”“建议就医”等表达；涉及急症、自伤风险、严重高血压或严重高血糖等高风险情况时，应优先提示及时线下就医或紧急求助。

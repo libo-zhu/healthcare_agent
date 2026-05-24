@@ -1,0 +1,76 @@
+{
+  "judge_model": "gpt-5.5-high",
+  "judge_method": "KB-aware manual LLM-as-a-judge by Codex. Agent answers are evaluated against retrieved medical knowledge-base files as valid grounding evidence.",
+  "total_pairs": 80,
+  "judged_pairs": 80,
+  "failed_pairs": 0,
+  "deepseek_failed_cases": [
+    "case_019"
+  ],
+  "failure_rule": "If one side has no valid output, content scores are set to 1 for the failed side and the valid side wins if it produced a relevant answer.",
+  "winner_counts": {
+    "agent": 35,
+    "deepseek": 3,
+    "tie": 42
+  },
+  "winner_rates": {
+    "agent": 0.4375,
+    "deepseek": 0.0375,
+    "tie": 0.525
+  },
+  "average_scores": {
+    "agent": {
+      "correctness": 4.3,
+      "coverage": 4.95,
+      "groundedness": 4.6875,
+      "safety": 4.875
+    },
+    "deepseek": {
+      "correctness": 4.4875,
+      "coverage": 4.5375,
+      "groundedness": 4.0125,
+      "safety": 4.85
+    }
+  },
+  "agent_knowledge_overlap_cases": 77,
+  "winner_counts_by_risk": {
+    "medium": {
+      "agent": 24,
+      "deepseek": 2,
+      "tie": 20,
+      "total": 46
+    },
+    "high": {
+      "agent": 11,
+      "deepseek": 1,
+      "tie": 18,
+      "total": 30
+    },
+    "low": {
+      "agent": 0,
+      "deepseek": 0,
+      "tie": 4,
+      "total": 4
+    }
+  },
+  "winner_counts_by_difficulty": {
+    "easy": {
+      "agent": 8,
+      "deepseek": 2,
+      "tie": 17,
+      "total": 27
+    },
+    "medium": {
+      "agent": 20,
+      "deepseek": 1,
+      "tie": 19,
+      "total": 40
+    },
+    "hard": {
+      "agent": 7,
+      "deepseek": 0,
+      "tie": 6,
+      "total": 13
+    }
+  }
+}
